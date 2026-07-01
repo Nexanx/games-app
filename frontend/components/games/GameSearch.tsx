@@ -56,7 +56,7 @@ export function GameSearch({ onAdded }: { onAdded: () => void }) {
     <Card>
       <CardHeader>
         <CardTitle>Wyszukaj grę</CardTitle>
-        <CardDescription>RAWG z kluczem API, mock data bez klucza.</CardDescription>
+        <CardDescription>Wyszukiwanie korzysta z RAWG i wymaga skonfigurowanego klucza API.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="flex flex-col gap-2 sm:flex-row">
@@ -87,4 +87,3 @@ export function GameSearch({ onAdded }: { onAdded: () => void }) {
     </Card>
   );
 }
-

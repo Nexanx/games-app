@@ -28,18 +28,22 @@ function qs(params: Record<string, QueryValue>) {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_URL}${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {})
-    },
-    cache: "no-store"
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}${path}`, {
+      ...init,
+      headers: {
+        "Content-Type": "application/json",
+        ...(init?.headers ?? {})
+      },
+      cache: "no-store"
+    });
+  } catch {
+    throw new Error(`Nie udało się połączyć z API (${API_URL}). Sprawdź, czy backend działa i czy adres API jest poprawny.`);
+  }
 
   if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || `API error ${response.status}`);
+    throw new Error(await readApiError(response));
   }
 
   if (response.status === 204) {
@@ -47,6 +51,30 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   return response.json() as Promise<T>;
+}
+
+async function readApiError(response: Response) {
+  const defaultMessage = `API error ${response.status}`;
+  const text = await response.text();
+  if (!text) {
+    return defaultMessage;
+  }
+  try {
+    const payload = JSON.parse(text);
+    const detail = payload?.detail;
+    if (typeof detail === "string") {
+      return detail;
+    }
+    if (detail?.code && detail?.message) {
+      return `${detail.code}: ${detail.message}`;
+    }
+    if (detail?.message) {
+      return detail.message;
+    }
+    return JSON.stringify(payload) || defaultMessage;
+  } catch {
+    return text || defaultMessage;
+  }
 }
 
 export const api = {

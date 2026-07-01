@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.database.session import get_session
-from app.integrations.game_provider import GameProvider
+from app.integrations.game_provider import GameProvider, GameProviderConfigurationError, GameProviderRequestError
 from app.models import Game
 from app.schemas.games import GameCreate, GameRead, GameSearchResult, GameUpdate
 
@@ -14,7 +14,18 @@ router = APIRouter()
 @router.get("/search", response_model=list[GameSearchResult])
 async def search_games(query: str = Query(..., min_length=1, max_length=100)) -> list[GameSearchResult]:
     provider = GameProvider(get_settings())
-    return await provider.search(query)
+    try:
+        return await provider.search(query)
+    except GameProviderConfigurationError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "GAME_PROVIDER_NOT_CONFIGURED", "message": "RAWG_API_KEY is not configured."},
+        ) from exc
+    except GameProviderRequestError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail={"code": "GAME_PROVIDER_REQUEST_FAILED", "message": "RAWG API request failed."},
+        ) from exc
 
 
 @router.get("", response_model=list[GameRead])
@@ -58,4 +69,3 @@ def delete_game(game_id: int, db: Session = Depends(get_session)) -> None:
         raise HTTPException(status_code=404, detail="Game not found")
     db.delete(game)
     db.commit()
-

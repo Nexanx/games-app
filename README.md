@@ -1,6 +1,6 @@
 # Games & Path of Exile Tracker
 
-Prywatna aplikacja webowa do zarządzania backlogiem gier, postaciami Path of Exile 1/2, statystykami dropów oraz lokalnym chatbotem do pytań o zapisane dane.
+Prywatna aplikacja webowa do zarządzania backlogiem gier, postaciami Path of Exile 1/2, statystykami dropów oraz chatbotem do pytań o zapisane dane.
 
 Nie ma logowania, rejestracji, ról ani systemu kont. Next.js jest wyłącznie frontendem, a cała logika API, integracje, baza i chatbot są w backendzie FastAPI.
 
@@ -9,7 +9,7 @@ Nie ma logowania, rejestracji, ról ani systemu kont. Next.js jest wyłącznie f
 - Frontend: Next.js, TypeScript, Tailwind CSS, komponenty w stylu shadcn/ui, dnd-kit, react-hook-form, Zod, PWA manifest.
 - Backend: Python, FastAPI, SQLAlchemy 2.0, Pydantic, Alembic, Uvicorn.
 - Baza: PostgreSQL przez Docker Compose.
-- Integracje: RAWG z fallbackiem mock data, konserwatywny importer poe.ninja, chatbot intent-based z miejscem na OpenAI-compatible API.
+- Integracje: RAWG bez danych testowych, konserwatywny importer poe.ninja, chatbot przez OpenAI-compatible API, np. Gemini.
 
 ## Struktura
 
@@ -57,7 +57,15 @@ FRONTEND_URL=http://localhost:3000
 NEXT_PUBLIC_API_URL=http://localhost:8000/api
 ```
 
-`RAWG_API_KEY`, `IGDB_CLIENT_ID`, `IGDB_CLIENT_SECRET`, `OPENAI_API_KEY`, `OPENAI_BASE_URL` i `OPENAI_MODEL` mogą zostać puste. Bez klucza RAWG wyszukiwanie gier działa na mock data, a chatbot używa lokalnych intencji.
+`RAWG_API_KEY` jest wymagany do wyszukiwania gier. `OPENAI_API_KEY` i `OPENAI_MODEL` są wymagane do odpowiedzi chatbota. Jeśli konfiguracji brakuje albo zewnętrzne API zwróci błąd, backend zwróci jawny kod błędu 503/502 zamiast używać mocków.
+
+Gemini działa przez OpenAI-compatible endpoint:
+
+```env
+OPENAI_API_KEY=twoj_klucz_gemini
+OPENAI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
+OPENAI_MODEL=gemini-3.5-flash
+```
 
 ## Uruchomienie
 
@@ -147,6 +155,18 @@ Aplikacja ma manifest, service worker i stronę offline. W produkcji po HTTPS mo
 - iPhone/Safari: `Udostępnij` -> `Do ekranu początkowego`.
 
 Service worker cache'uje shell aplikacji i zasoby statyczne. Endpointy `/api` są zawsze pobierane z sieci, żeby nie pokazywać nieaktualnych danych.
+
+## Troubleshooting
+
+### `DATABASE_UNAVAILABLE` albo błąd hasła PostgreSQL
+
+Jeśli backend pokazuje błąd podobny do `password authentication failed for user "games"`, to `DATABASE_URL` nie pasuje do hasła zapisanej bazy PostgreSQL. Najczęstsze przyczyny:
+
+- kontener PostgreSQL używa starego wolumenu utworzonego z innym `POSTGRES_PASSWORD`,
+- `backend/.env` ma inne hasło niż `docker-compose.yml` albo `.env.production`,
+- lokalnie działa inny PostgreSQL na porcie `5432`.
+
+Rozwiązanie bez kasowania danych: ustaw `DATABASE_URL` dokładnie pod istniejące hasło bazy. Rozwiązanie tylko dla pustej/dev bazy: zatrzymaj kontener i usuń wolumen PostgreSQL, a potem utwórz bazę od nowa.
 
 ## Seed danych
 
