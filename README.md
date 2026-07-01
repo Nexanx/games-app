@@ -59,6 +59,8 @@ NEXT_PUBLIC_API_URL=http://localhost:8000/api
 
 `RAWG_API_KEY` jest wymagany do wyszukiwania gier. `OPENAI_API_KEY` i `OPENAI_MODEL` są wymagane do odpowiedzi chatbota. Jeśli konfiguracji brakuje albo zewnętrzne API zwróci błąd, backend zwróci jawny kod błędu 503/502 zamiast używać mocków.
 
+Przy ręcznym dodawaniu gry możesz wpisać sam tytuł. Jeśli `cover_url` jest puste, backend spróbuje pobrać okładkę i brakujące metadane z RAWG. Gdy RAWG nie jest skonfigurowany albo nie zwróci okładki, API zwróci jawny błąd zamiast zapisać rekord z danymi zastępczymi.
+
 Gemini działa przez OpenAI-compatible endpoint:
 
 ```env
@@ -100,6 +102,7 @@ make db-up
 make backend-install
 make backend-migrate
 make backend-seed
+make backend-clear-sample-data
 make backend-dev
 make frontend-install
 make frontend-dev
@@ -182,11 +185,18 @@ Rozwiązanie bez kasowania danych: ustaw `DATABASE_URL` dokładnie pod istnieją
 
 ## Seed danych
 
-Seed dodaje przykładowe gry, backlog, ligi PoE, postacie i statystyki walut. Skrypt nie dopisuje drugi raz danych, jeśli tabela `games` nie jest pusta.
+Seed nie dodaje przykładowych gier, postaci ani statystyk PoE. Tworzy tylko neutralne ustawienia startowe, np. ciemny motyw.
 
 ```powershell
 cd backend
 .\.venv\Scripts\python -m app.database.seed
+```
+
+Jeśli masz lokalną bazę utworzoną starszą wersją projektu, możesz usunąć dawne przykładowe rekordy seedowe:
+
+```powershell
+cd backend
+.\.venv\Scripts\python -m app.database.clear_sample_data
 ```
 
 ## Najważniejsze endpointy

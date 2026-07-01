@@ -60,7 +60,7 @@ export function GameSearch({ onAdded }: { onAdded: () => void }) {
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="flex flex-col gap-2 sm:flex-row">
-          <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="np. Hades, Elden Ring" onKeyDown={(event) => event.key === "Enter" && search()} />
+          <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Wpisz tytuł gry" onKeyDown={(event) => event.key === "Enter" && search()} />
           <Button onClick={search} disabled={loading}>
             <Search className="h-4 w-4" aria-hidden="true" />
             Szukaj

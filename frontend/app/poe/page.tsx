@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
-import { Plus, RefreshCw } from "lucide-react";
+import { CalendarPlus, Plus, RefreshCw, UserPlus } from "lucide-react";
 
 import { LeagueSelector } from "@/components/poe/LeagueSelector";
 import { PoeCharacterCard } from "@/components/poe/PoeCharacterCard";
@@ -27,6 +27,7 @@ export default function PoePage() {
   const [status, setStatus] = useState("");
   const [sort, setSort] = useState("added");
   const [search, setSearch] = useState("");
+  const [openPanel, setOpenPanel] = useState<"league" | "character" | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -51,6 +52,11 @@ export default function PoePage() {
     load();
   }, [gameVersion, leagueId, status, sort]);
 
+  function afterPoeAdded() {
+    setOpenPanel(null);
+    void load();
+  }
+
   return (
     <div className="space-y-6">
       <header className="flex flex-col gap-2">
@@ -61,9 +67,27 @@ export default function PoePage() {
         </p>
       </header>
 
-      <section className="grid gap-4 xl:grid-cols-[0.8fr_1.2fr]">
-        <LeagueForm onAdded={load} />
-        <PoeCharacterForm leagues={leagues} onAdded={load} />
+      <section className="space-y-3">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Button
+            variant={openPanel === "league" ? "primary" : "secondary"}
+            className="min-h-12 justify-start"
+            onClick={() => setOpenPanel(openPanel === "league" ? null : "league")}
+          >
+            <CalendarPlus className="h-4 w-4" aria-hidden="true" />
+            Dodaj ligę
+          </Button>
+          <Button
+            variant={openPanel === "character" ? "primary" : "secondary"}
+            className="min-h-12 justify-start"
+            onClick={() => setOpenPanel(openPanel === "character" ? null : "character")}
+          >
+            <UserPlus className="h-4 w-4" aria-hidden="true" />
+            Dodaj postać
+          </Button>
+        </div>
+        {openPanel === "league" ? <LeagueForm onAdded={afterPoeAdded} /> : null}
+        {openPanel === "character" ? <PoeCharacterForm leagues={leagues} onAdded={afterPoeAdded} /> : null}
       </section>
 
       <Card>

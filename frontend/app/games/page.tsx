@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Filter, RefreshCw } from "lucide-react";
+import { Filter, Plus, RefreshCw, Search } from "lucide-react";
 
 import { BacklogList } from "@/components/games/BacklogList";
 import { GameForm } from "@/components/games/GameForm";
@@ -21,6 +21,7 @@ export default function GamesPage() {
   const [status, setStatus] = useState("");
   const [sort, setSort] = useState("position");
   const [search, setSearch] = useState("");
+  const [openPanel, setOpenPanel] = useState<"search" | "manual" | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -44,6 +45,11 @@ export default function GamesPage() {
     load();
   }, [status, sort]);
 
+  function afterGameAdded() {
+    setOpenPanel(null);
+    void load();
+  }
+
   return (
     <div className="space-y-6">
       <header className="flex flex-col gap-2">
@@ -54,9 +60,27 @@ export default function GamesPage() {
         </p>
       </header>
 
-      <section className="grid gap-4 xl:grid-cols-2">
-        <GameSearch onAdded={() => load()} />
-        <GameForm onAdded={() => load()} />
+      <section className="space-y-3">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Button
+            variant={openPanel === "search" ? "primary" : "secondary"}
+            className="min-h-12 justify-start"
+            onClick={() => setOpenPanel(openPanel === "search" ? null : "search")}
+          >
+            <Search className="h-4 w-4" aria-hidden="true" />
+            Wyszukaj w bazie
+          </Button>
+          <Button
+            variant={openPanel === "manual" ? "primary" : "secondary"}
+            className="min-h-12 justify-start"
+            onClick={() => setOpenPanel(openPanel === "manual" ? null : "manual")}
+          >
+            <Plus className="h-4 w-4" aria-hidden="true" />
+            Dodaj ręcznie
+          </Button>
+        </div>
+        {openPanel === "search" ? <GameSearch onAdded={afterGameAdded} /> : null}
+        {openPanel === "manual" ? <GameForm onAdded={afterGameAdded} /> : null}
       </section>
 
       <Card>
@@ -95,4 +119,3 @@ export default function GamesPage() {
     </div>
   );
 }
-

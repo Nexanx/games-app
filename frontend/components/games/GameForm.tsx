@@ -60,14 +60,14 @@ export function GameForm({ onAdded }: { onAdded: () => void }) {
     <Card>
       <CardHeader>
         <CardTitle>Dodaj ręcznie</CardTitle>
-        <CardDescription>Gdy baza gier nic nie znajdzie albo chcesz wpisać własne dane.</CardDescription>
+        <CardDescription>Wpisz tytuł, a backend spróbuje pobrać okładkę i metadane z RAWG.</CardDescription>
       </CardHeader>
       <CardContent>
         <form className="space-y-3" onSubmit={handleSubmit(onSubmit)}>
           <Field label="Tytuł" error={formState.errors.title?.message}>
             <Input {...register("title")} placeholder="Tytuł gry" />
           </Field>
-          <Field label="URL okładki">
+          <Field label="URL okładki (opcjonalnie)">
             <Input {...register("cover_url")} placeholder="https://..." />
           </Field>
           <div className="grid gap-3 sm:grid-cols-2">

@@ -1,4 +1,4 @@
-.PHONY: db-up db-down backend-install backend-migrate backend-seed backend-dev backend-test frontend-install frontend-dev frontend-build prod-build prod-up prod-down backup-db
+.PHONY: db-up db-down backend-install backend-migrate backend-seed backend-clear-sample-data backend-dev backend-test frontend-install frontend-dev frontend-build prod-build prod-up prod-down backup-db
 
 db-up:
 	docker compose up -d postgres
@@ -14,6 +14,9 @@ backend-migrate:
 
 backend-seed:
 	cd backend && .venv\Scripts\python -m app.database.seed
+
+backend-clear-sample-data:
+	cd backend && .venv\Scripts\python -m app.database.clear_sample_data
 
 backend-dev:
 	cd backend && .venv\Scripts\uvicorn app.main:app --reload --host 0.0.0.0 --port 8000

@@ -34,8 +34,13 @@ def list_games(db: Session = Depends(get_session)) -> list[Game]:
 
 
 @router.post("", response_model=GameRead, status_code=201)
-def create_game(payload: GameCreate, db: Session = Depends(get_session)) -> Game:
-    game = Game(**payload.model_dump())
+async def create_game(payload: GameCreate, db: Session = Depends(get_session)) -> Game:
+    data = payload.model_dump()
+    if not data.get("cover_url"):
+        result = await _find_cover_result(payload.title)
+        data = _merge_provider_data(data, result)
+
+    game = Game(**data)
     db.add(game)
     db.commit()
     db.refresh(game)
@@ -69,3 +74,65 @@ def delete_game(game_id: int, db: Session = Depends(get_session)) -> None:
         raise HTTPException(status_code=404, detail="Game not found")
     db.delete(game)
     db.commit()
+
+
+async def _find_cover_result(title: str) -> GameSearchResult:
+    provider = GameProvider(get_settings())
+    try:
+        results = await provider.search(title)
+    except GameProviderConfigurationError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "GAME_COVER_PROVIDER_NOT_CONFIGURED",
+                "message": "RAWG_API_KEY is required when adding a game without cover_url.",
+            },
+        ) from exc
+    except GameProviderRequestError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "code": "GAME_COVER_PROVIDER_REQUEST_FAILED",
+                "message": "RAWG API request failed while fetching cover.",
+            },
+        ) from exc
+
+    result = _select_cover_result(results, title)
+    if not result:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "GAME_COVER_NOT_FOUND", "message": "RAWG did not return a cover for this title."},
+        )
+    return result
+
+
+def _select_cover_result(results: list[GameSearchResult], title: str) -> GameSearchResult | None:
+    with_cover = [result for result in results if result.cover_url]
+    if not with_cover:
+        return None
+    normalized_title = title.strip().casefold()
+    exact_match = next(
+        (result for result in with_cover if result.title.strip().casefold() == normalized_title),
+        None,
+    )
+    return exact_match or with_cover[0]
+
+
+def _merge_provider_data(data: dict, result: GameSearchResult) -> dict:
+    merged = data.copy()
+    merged["cover_url"] = result.cover_url
+    if not merged.get("description") and result.description:
+        merged["description"] = result.description
+    if not merged.get("release_date") and result.release_date:
+        merged["release_date"] = result.release_date
+    if not merged.get("genres") and result.genres:
+        merged["genres"] = result.genres
+    if not merged.get("platforms") and result.platforms:
+        merged["platforms"] = result.platforms
+    if not merged.get("external_id") and result.external_id:
+        merged["external_id"] = result.external_id
+    if (not merged.get("external_source") or merged.get("external_source") == "manual") and result.external_source:
+        merged["external_source"] = result.external_source
+    if not merged.get("external_url") and result.external_url:
+        merged["external_url"] = result.external_url
+    return merged
