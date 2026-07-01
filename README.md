@@ -63,6 +63,8 @@ Przy ręcznym dodawaniu gry możesz wpisać sam tytuł. Jeśli `cover_url` jest 
 
 Backend ładuje konfigurację z rootowego `.env.production`, rootowego `.env` oraz `backend/.env`. Po zmianie kluczy API zrestartuj lokalny `uvicorn` albo odtwórz kontener backendu, żeby proces dostał nowe zmienne.
 
+`POE_API_TOKEN` jest opcjonalny, ale wymagany do automatycznej synchronizacji lig z oficjalnego API Path of Exile. Token musi mieć scope `service:leagues`. Import postaci z poe.ninja może utworzyć brakującą ligę automatycznie z samego linku, jeśli link zawiera nazwę ligi.
+
 Gemini działa przez OpenAI-compatible endpoint:
 
 ```env
@@ -212,6 +214,7 @@ cd backend
 - `POST /api/backlog/{id}/mark-playing`
 - `POST /api/backlog/{id}/mark-abandoned`
 - `GET/POST/PATCH/DELETE /api/poe/leagues`
+- `POST /api/poe/leagues/sync`
 - `GET/POST/PATCH/DELETE /api/poe/characters`
 - `POST /api/poe/import-from-ninja`
 - `GET/POST /api/poe/characters/{id}/stats`

@@ -9,6 +9,8 @@ import type {
   PoeCharacter,
   PoeCurrencyStat,
   PoeLeague,
+  PoeLeagueSyncResult,
+  PoeNinjaImportResult,
   Setting
 } from "@/types";
 
@@ -98,6 +100,11 @@ export const api = {
   listLeagues: () => request<PoeLeague[]>("/poe/leagues"),
   createLeague: (payload: Partial<PoeLeague>) =>
     request<PoeLeague>("/poe/leagues", { method: "POST", body: JSON.stringify(payload) }),
+  syncLeagues: (game_version?: string) =>
+    request<PoeLeagueSyncResult>("/poe/leagues/sync", {
+      method: "POST",
+      body: JSON.stringify({ game_version: game_version || null })
+    }),
   listCharacters: (params: Record<string, QueryValue> = {}) =>
     request<PoeCharacter[]>(`/poe/characters${qs(params)}`),
   getCharacter: (id: number) => request<PoeCharacter>(`/poe/characters/${id}`),
@@ -107,7 +114,7 @@ export const api = {
     request<PoeCharacter>(`/poe/characters/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
   deleteCharacter: (id: number) => request<void>(`/poe/characters/${id}`, { method: "DELETE" }),
   importFromNinja: (url: string) =>
-    request<Partial<PoeCharacter> & { league_name?: string; notes: string }>("/poe/import-from-ninja", {
+    request<PoeNinjaImportResult>("/poe/import-from-ninja", {
       method: "POST",
       body: JSON.stringify({ url })
     }),

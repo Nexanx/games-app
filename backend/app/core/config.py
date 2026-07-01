@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     rawg_api_key: str | None = None
     igdb_client_id: str | None = None
     igdb_client_secret: str | None = None
+    poe_api_token: str | None = None
     openai_api_key: str | None = None
     openai_base_url: str | None = None
     openai_model: str | None = None
