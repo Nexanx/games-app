@@ -5,7 +5,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     app_name: str = "Games & Path of Exile Tracker"
-    database_url: str = "postgresql+psycopg://games:games@localhost:5432/games_app"
+    database_url: str = "postgresql+psycopg://games:games@localhost:5433/games_app"
     rawg_api_key: str | None = None
     igdb_client_id: str | None = None
     igdb_client_secret: str | None = None
@@ -20,4 +20,3 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
-

@@ -2,13 +2,11 @@ from datetime import date, datetime, timezone
 
 from sqlalchemy import select
 
-from app.database.base import Base
 from app.database.session import SessionLocal, engine
 from app.models import BacklogGame, Game, PoeCharacter, PoeCurrencyStat, PoeLeague, Setting
 
 
 def seed() -> None:
-    Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
         if db.scalar(select(Game.id).limit(1)):
@@ -117,4 +115,3 @@ def seed() -> None:
 
 if __name__ == "__main__":
     seed()
-
