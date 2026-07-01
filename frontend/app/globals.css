@@ -1,0 +1,49 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-height: 100%;
+  background: #080d16;
+}
+
+body {
+  min-height: 100%;
+  margin: 0;
+  background:
+    radial-gradient(circle at top left, rgba(24, 146, 116, 0.13), transparent 34rem),
+    linear-gradient(135deg, #080d16 0%, #101722 52%, #0a0f18 100%);
+  color: hsl(210 30% 96%);
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+.poe-tooltip-frame {
+  background:
+    linear-gradient(180deg, rgba(47, 33, 21, 0.96), rgba(10, 9, 8, 0.98)),
+    repeating-linear-gradient(90deg, rgba(197, 139, 54, 0.08) 0 1px, transparent 1px 7px);
+  border: 1px solid rgba(216, 163, 75, 0.65);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 238, 184, 0.12),
+    inset 0 0 44px rgba(0, 0, 0, 0.62),
+    0 22px 70px rgba(0, 0, 0, 0.45);
+}
+
+.poe-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(233, 185, 95, 0.8), transparent);
+}
+

@@ -1,0 +1,18 @@
+{
+  "name": "Games & Path of Exile Tracker",
+  "short_name": "Games PoE",
+  "description": "Prywatna aplikacja do backlogu gier i statystyk Path of Exile.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#080d16",
+  "theme_color": "#080d16",
+  "icons": [
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
+

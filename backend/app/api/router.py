@@ -1,0 +1,12 @@
+from fastapi import APIRouter
+
+from app.api import backlog, chat, dashboard, games, poe, settings
+
+api_router = APIRouter()
+api_router.include_router(games.router, prefix="/games", tags=["games"])
+api_router.include_router(backlog.router, prefix="/backlog", tags=["backlog"])
+api_router.include_router(poe.router, prefix="/poe", tags=["path-of-exile"])
+api_router.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])
+api_router.include_router(chat.router, prefix="/chat", tags=["chat"])
+api_router.include_router(settings.router, prefix="/settings", tags=["settings"])
+
