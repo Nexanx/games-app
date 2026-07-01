@@ -20,7 +20,7 @@ class PoeNinjaService:
         if name and name.lower() in {"builds", "characters"}:
             name = None
 
-        league_name = query.get("league", [None])[0]
+        league_name = query.get("league", [None])[0] or self._league_from_path(path_parts)
         game_version = "poe2" if "poe2" in parsed.netloc.lower() or "poe2" in parsed.path.lower() else "poe1"
 
         return PoeNinjaImportResult(
@@ -34,3 +34,15 @@ class PoeNinjaService:
             ),
         )
 
+    @staticmethod
+    def _league_from_path(path_parts: list[str]) -> str | None:
+        markers = {"builds", "characters"}
+        ignored = {"character", "characters", "builds", "overview"}
+        for index, part in enumerate(path_parts):
+            if part.lower() not in markers or index + 1 >= len(path_parts):
+                continue
+            candidate = path_parts[index + 1].strip()
+            if candidate.lower() in ignored:
+                continue
+            return candidate.replace("-", " ").replace("_", " ").title()
+        return None

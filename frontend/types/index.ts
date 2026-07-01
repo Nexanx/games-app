@@ -57,6 +57,13 @@ export interface PoeLeague {
   updated_at: string;
 }
 
+export interface PoeLeagueSyncResult {
+  created: number;
+  updated: number;
+  leagues: PoeLeague[];
+  source: string;
+}
+
 export interface PoeCharacter {
   id: number;
   name: string;
@@ -76,6 +83,12 @@ export interface PoeCharacter {
   notes?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface PoeNinjaImportResult extends Partial<PoeCharacter> {
+  league_name?: string | null;
+  league_id?: number | null;
+  notes: string;
 }
 
 export interface PoeCurrencyStat {

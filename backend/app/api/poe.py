@@ -2,7 +2,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session, selectinload
 
+from app.core.config import get_settings
 from app.database.session import get_session
+from app.integrations.poe_leagues import (
+    PoeLeagueProvider,
+    PoeLeagueProviderConfigurationError,
+    PoeLeagueProviderRequestError,
+)
 from app.integrations.poe_ninja import PoeNinjaService
 from app.models import PoeCharacter, PoeCurrencyStat, PoeLeague
 from app.schemas.poe import (
@@ -14,11 +20,14 @@ from app.schemas.poe import (
     PoeCurrencyStatUpdate,
     PoeLeagueCreate,
     PoeLeagueRead,
+    PoeLeagueSyncRequest,
+    PoeLeagueSyncResult,
     PoeLeagueUpdate,
     PoeNinjaImportRequest,
     PoeNinjaImportResult,
     PoeStatsReorder,
 )
+from app.services.poe_league_service import get_or_create_league_by_name, upsert_poe_leagues
 from app.services.poe_service import reorder_currency_stats
 
 router = APIRouter()
@@ -39,6 +48,32 @@ def create_league(payload: PoeLeagueCreate, db: Session = Depends(get_session)) 
     db.commit()
     db.refresh(league)
     return league
+
+
+@router.post("/leagues/sync", response_model=PoeLeagueSyncResult)
+async def sync_leagues(payload: PoeLeagueSyncRequest, db: Session = Depends(get_session)) -> PoeLeagueSyncResult:
+    provider = PoeLeagueProvider(get_settings())
+    try:
+        candidates = await provider.fetch(payload.game_version)
+    except PoeLeagueProviderConfigurationError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "POE_LEAGUE_PROVIDER_NOT_CONFIGURED",
+                "message": "POE_API_TOKEN is required to sync leagues from the official Path of Exile API.",
+            },
+        ) from exc
+    except PoeLeagueProviderRequestError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "code": "POE_LEAGUE_PROVIDER_REQUEST_FAILED",
+                "message": "Path of Exile league API request failed.",
+            },
+        ) from exc
+
+    created, updated, leagues = upsert_poe_leagues(db, candidates)
+    return PoeLeagueSyncResult(created=created, updated=updated, leagues=leagues)
 
 
 @router.patch("/leagues/{league_id}", response_model=PoeLeagueRead)
@@ -132,8 +167,18 @@ def delete_character(character_id: int, db: Session = Depends(get_session)) -> N
 
 
 @router.post("/import-from-ninja", response_model=PoeNinjaImportResult)
-def import_from_ninja(payload: PoeNinjaImportRequest) -> PoeNinjaImportResult:
-    return PoeNinjaService().import_from_url(payload.url)
+def import_from_ninja(payload: PoeNinjaImportRequest, db: Session = Depends(get_session)) -> PoeNinjaImportResult:
+    result = PoeNinjaService().import_from_url(payload.url)
+    if not result.league_name:
+        return result
+
+    league = get_or_create_league_by_name(
+        db,
+        result.league_name,
+        result.game_version,
+        notes="Utworzono automatycznie z linku poe.ninja.",
+    )
+    return result.model_copy(update={"league_id": league.id})
 
 
 @router.get("/characters/{character_id}/stats", response_model=list[PoeCurrencyStatRead])
@@ -189,4 +234,3 @@ def reorder_stats(character_id: int, payload: PoeStatsReorder, db: Session = Dep
         return reorder_currency_stats(db, character_id, payload.ordered_ids)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-

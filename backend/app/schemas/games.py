@@ -40,7 +40,7 @@ class GameRead(GameBase):
 
 
 class GameSearchResult(GameBase):
-    source: str = "mock"
+    source: str = "RAWG"
 
 
 class BacklogGameBase(BaseModel):
@@ -108,4 +108,3 @@ class GameStatRead(GameStatBase):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
-

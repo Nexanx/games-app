@@ -33,6 +33,17 @@ class PoeLeagueRead(PoeLeagueBase):
     model_config = ConfigDict(from_attributes=True)
 
 
+class PoeLeagueSyncRequest(BaseModel):
+    game_version: str | None = Field(default=None, pattern="^poe[12]$")
+
+
+class PoeLeagueSyncResult(BaseModel):
+    created: int
+    updated: int
+    leagues: list[PoeLeagueRead]
+    source: str = "official_pathofexile_api"
+
+
 class PoeCharacterBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     game_version: str = Field(..., pattern="^poe[12]$")
@@ -128,6 +139,7 @@ class PoeNinjaImportResult(BaseModel):
     ascendancy: str | None = None
     level: int | None = None
     league_name: str | None = None
+    league_id: int | None = None
     poe_ninja_url: str
     profile_url: str | None = None
     build_name: str | None = None
@@ -135,4 +147,3 @@ class PoeNinjaImportResult(BaseModel):
     mode: str | None = None
     status: str = "manual_review"
     notes: str
-

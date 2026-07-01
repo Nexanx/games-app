@@ -1,4 +1,7 @@
 .env
+.env.production
+backend/.env
+frontend/.env.local
 .venv/
 __pycache__/
 .pytest_cache/
@@ -12,3 +15,4 @@ dist/
 coverage/
 *.log
 *.tsbuildinfo
+backups/

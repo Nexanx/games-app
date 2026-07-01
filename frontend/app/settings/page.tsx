@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Save, Server, ShieldCheck } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { InstallPwaButton } from "@/components/pwa/InstallPwaButton";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { LoadingState } from "@/components/ui/LoadingState";
@@ -73,7 +74,7 @@ export default function SettingsPage() {
           <CardContent className="space-y-3 text-sm text-muted-foreground">
             <p>Adres API: {process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api"}</p>
             <p>CORS ograniczasz po stronie backendu przez `FRONTEND_URL`.</p>
-            <p>Klucze RAWG, IGDB i OpenAI są czytane tylko z `.env` backendu.</p>
+            <p>Klucze RAWG, IGDB i OpenAI-compatible API są czytane tylko z `.env` backendu.</p>
           </CardContent>
         </Card>
 
@@ -87,11 +88,23 @@ export default function SettingsPage() {
           </CardHeader>
           <CardContent className="space-y-3 text-sm text-muted-foreground">
             <p>Chatbot nie wykonuje promptów jako SQL i nie modyfikuje danych.</p>
-            <p>Integracje mają fallbacki, więc aplikacja działa bez kluczy API.</p>
+            <p>Integracje zwracają jawny kod błędu, jeśli brakuje konfiguracji albo zewnętrzne API nie odpowiada.</p>
             <p>Zapis trwały jest w PostgreSQL.</p>
           </CardContent>
         </Card>
       </section>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Instalacja na telefonie</CardTitle>
+          <CardDescription>PWA działa najlepiej po HTTPS albo przez prywatny VPN/reverse proxy.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm text-muted-foreground">
+          <p>Na Androidzie przycisk instalacji pojawi się, gdy przeglądarka uzna aplikację za gotową do instalacji.</p>
+          <p>Na iPhonie użyj Safari: Udostępnij, a potem “Do ekranu początkowego”.</p>
+          <InstallPwaButton />
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -124,4 +137,3 @@ export default function SettingsPage() {
     </div>
   );
 }
-

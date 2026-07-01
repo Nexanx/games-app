@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
-import { Plus, RefreshCw } from "lucide-react";
+import { CalendarPlus, CloudDownload, Plus, RefreshCw, UserPlus } from "lucide-react";
 
 import { LeagueSelector } from "@/components/poe/LeagueSelector";
 import { PoeCharacterCard } from "@/components/poe/PoeCharacterCard";
@@ -27,6 +27,9 @@ export default function PoePage() {
   const [status, setStatus] = useState("");
   const [sort, setSort] = useState("added");
   const [search, setSearch] = useState("");
+  const [openPanel, setOpenPanel] = useState<"league" | "character" | null>(null);
+  const [syncingLeagues, setSyncingLeagues] = useState(false);
+  const [leagueMessage, setLeagueMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -51,6 +54,31 @@ export default function PoePage() {
     load();
   }, [gameVersion, leagueId, status, sort]);
 
+  async function refreshLeagues() {
+    const leagueData = await api.listLeagues();
+    setLeagues(leagueData);
+    return leagueData;
+  }
+
+  function afterPoeAdded() {
+    setOpenPanel(null);
+    void load();
+  }
+
+  async function syncPoeLeagues() {
+    setSyncingLeagues(true);
+    setLeagueMessage(null);
+    try {
+      const result = await api.syncLeagues();
+      setLeagueMessage(`Zsynchronizowano ligi: ${result.created} nowych, ${result.updated} zaktualizowanych.`);
+      await load();
+    } catch (err) {
+      setLeagueMessage(err instanceof Error ? err.message : "Nie udało się zsynchronizować lig");
+    } finally {
+      setSyncingLeagues(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <header className="flex flex-col gap-2">
@@ -61,9 +89,39 @@ export default function PoePage() {
         </p>
       </header>
 
-      <section className="grid gap-4 xl:grid-cols-[0.8fr_1.2fr]">
-        <LeagueForm onAdded={load} />
-        <PoeCharacterForm leagues={leagues} onAdded={load} />
+      <section className="space-y-3">
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Button
+            variant="primary"
+            className="min-h-12 justify-start"
+            onClick={syncPoeLeagues}
+            disabled={syncingLeagues}
+          >
+            <CloudDownload className="h-4 w-4" aria-hidden="true" />
+            Synchronizuj ligi
+          </Button>
+          <Button
+            variant={openPanel === "league" ? "primary" : "secondary"}
+            className="min-h-12 justify-start"
+            onClick={() => setOpenPanel(openPanel === "league" ? null : "league")}
+          >
+            <CalendarPlus className="h-4 w-4" aria-hidden="true" />
+            Dodaj ligę ręcznie
+          </Button>
+          <Button
+            variant={openPanel === "character" ? "primary" : "secondary"}
+            className="min-h-12 justify-start"
+            onClick={() => setOpenPanel(openPanel === "character" ? null : "character")}
+          >
+            <UserPlus className="h-4 w-4" aria-hidden="true" />
+            Dodaj postać
+          </Button>
+        </div>
+        {leagueMessage ? <p className="text-sm text-muted-foreground">{leagueMessage}</p> : null}
+        {openPanel === "league" ? <LeagueForm onAdded={afterPoeAdded} /> : null}
+        {openPanel === "character" ? (
+          <PoeCharacterForm leagues={leagues} onAdded={afterPoeAdded} onLeaguesChanged={refreshLeagues} />
+        ) : null}
       </section>
 
       <Card>

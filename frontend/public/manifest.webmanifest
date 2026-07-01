@@ -2,10 +2,15 @@
   "name": "Games & Path of Exile Tracker",
   "short_name": "Games PoE",
   "description": "Prywatna aplikacja do backlogu gier i statystyk Path of Exile.",
+  "id": "/",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "browser"],
+  "orientation": "portrait-primary",
   "background_color": "#080d16",
   "theme_color": "#080d16",
+  "categories": ["games", "productivity", "utilities"],
   "icons": [
     {
       "src": "/icons/icon.svg",
@@ -13,6 +18,25 @@
       "type": "image/svg+xml",
       "purpose": "any maskable"
     }
+  ],
+  "shortcuts": [
+    {
+      "name": "Gry",
+      "short_name": "Gry",
+      "url": "/games",
+      "icons": [{ "src": "/icons/icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+    },
+    {
+      "name": "Path of Exile",
+      "short_name": "PoE",
+      "url": "/poe",
+      "icons": [{ "src": "/icons/icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+    },
+    {
+      "name": "Chatbot",
+      "short_name": "Chat",
+      "url": "/chatbot",
+      "icons": [{ "src": "/icons/icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+    }
   ]
 }
-

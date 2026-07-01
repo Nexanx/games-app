@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 
 import { MobileBottomNav } from "@/components/layout/MobileBottomNav";
 import { Sidebar } from "@/components/layout/Sidebar";
+import { PwaRegister } from "@/components/pwa/PwaRegister";
 
 export function AppLayout({ children }: { children: ReactNode }) {
   return (
@@ -13,7 +14,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
         <div className="mx-auto w-full max-w-7xl">{children}</div>
       </main>
       <MobileBottomNav />
+      <PwaRegister />
     </>
   );
 }
-

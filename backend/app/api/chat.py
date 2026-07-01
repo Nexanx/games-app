@@ -2,7 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session, selectinload
 
-from app.chatbot.intent_bot import IntentBasedChatbot
+from app.chatbot.llm_bot import ChatbotConfigurationError, ChatbotRequestError, OpenAICompatibleChatbot
+from app.core.config import get_settings
 from app.database.session import get_session
 from app.models import ChatMessage, ChatSession
 from app.schemas.chat import ChatRequest, ChatResponse, ChatSessionDetail, ChatSessionRead
@@ -22,7 +23,23 @@ def chat(payload: ChatRequest, db: Session = Depends(get_session)) -> ChatRespon
         db.flush()
 
     db.add(ChatMessage(session_id=chat_session.id, role="user", content=payload.message))
-    answer = IntentBasedChatbot(db).answer(payload.message)
+    try:
+        answer = OpenAICompatibleChatbot(db, get_settings()).answer(payload.message)
+    except ChatbotConfigurationError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "CHATBOT_LLM_NOT_CONFIGURED",
+                "message": "OPENAI_API_KEY and OPENAI_MODEL must be configured for chatbot responses.",
+            },
+        ) from exc
+    except ChatbotRequestError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=502,
+            detail={"code": "CHATBOT_LLM_REQUEST_FAILED", "message": "LLM provider request failed."},
+        ) from exc
     assistant_message = ChatMessage(session_id=chat_session.id, role="assistant", content=answer)
     db.add(assistant_message)
     db.commit()
@@ -52,4 +69,3 @@ def delete_session(session_id: int, db: Session = Depends(get_session)) -> None:
         raise HTTPException(status_code=404, detail="Chat session not found")
     db.delete(session)
     db.commit()
-

@@ -1,6 +1,6 @@
 # Games & Path of Exile Tracker
 
-Prywatna aplikacja webowa do zarządzania backlogiem gier, postaciami Path of Exile 1/2, statystykami dropów oraz lokalnym chatbotem do pytań o zapisane dane.
+Prywatna aplikacja webowa do zarządzania backlogiem gier, postaciami Path of Exile 1/2, statystykami dropów oraz chatbotem do pytań o zapisane dane.
 
 Nie ma logowania, rejestracji, ról ani systemu kont. Next.js jest wyłącznie frontendem, a cała logika API, integracje, baza i chatbot są w backendzie FastAPI.
 
@@ -9,7 +9,7 @@ Nie ma logowania, rejestracji, ról ani systemu kont. Next.js jest wyłącznie f
 - Frontend: Next.js, TypeScript, Tailwind CSS, komponenty w stylu shadcn/ui, dnd-kit, react-hook-form, Zod, PWA manifest.
 - Backend: Python, FastAPI, SQLAlchemy 2.0, Pydantic, Alembic, Uvicorn.
 - Baza: PostgreSQL przez Docker Compose.
-- Integracje: RAWG z fallbackiem mock data, konserwatywny importer poe.ninja, chatbot intent-based z miejscem na OpenAI-compatible API.
+- Integracje: RAWG bez danych testowych, konserwatywny importer poe.ninja, chatbot przez OpenAI-compatible API, np. Gemini.
 
 ## Struktura
 
@@ -52,12 +52,26 @@ Skopiuj `.env.example` do `.env` w katalogu głównym oraz do `backend/.env` i `
 Minimalne wartości:
 
 ```env
-DATABASE_URL=postgresql+psycopg://games:games@localhost:5432/games_app
+DATABASE_URL=postgresql+psycopg://games:games@localhost:5433/games_app
 FRONTEND_URL=http://localhost:3000
 NEXT_PUBLIC_API_URL=http://localhost:8000/api
 ```
 
-`RAWG_API_KEY`, `IGDB_CLIENT_ID`, `IGDB_CLIENT_SECRET`, `OPENAI_API_KEY`, `OPENAI_BASE_URL` i `OPENAI_MODEL` mogą zostać puste. Bez klucza RAWG wyszukiwanie gier działa na mock data, a chatbot używa lokalnych intencji.
+`RAWG_API_KEY` jest wymagany do wyszukiwania gier. `OPENAI_API_KEY` i `OPENAI_MODEL` są wymagane do odpowiedzi chatbota. Jeśli konfiguracji brakuje albo zewnętrzne API zwróci błąd, backend zwróci jawny kod błędu 503/502 zamiast używać mocków.
+
+Przy ręcznym dodawaniu gry możesz wpisać sam tytuł. Jeśli `cover_url` jest puste, backend spróbuje pobrać okładkę i brakujące metadane z RAWG. Gdy RAWG nie jest skonfigurowany albo nie zwróci okładki, API zwróci jawny błąd zamiast zapisać rekord z danymi zastępczymi.
+
+Backend ładuje konfigurację z rootowego `.env.production`, rootowego `.env` oraz `backend/.env`. Po zmianie kluczy API zrestartuj lokalny `uvicorn` albo odtwórz kontener backendu, żeby proces dostał nowe zmienne.
+
+`POE_API_TOKEN` jest opcjonalny, ale wymagany do automatycznej synchronizacji lig z oficjalnego API Path of Exile. Token musi mieć scope `service:leagues`. Import postaci z poe.ninja może utworzyć brakującą ligę automatycznie z samego linku, jeśli link zawiera nazwę ligi.
+
+Gemini działa przez OpenAI-compatible endpoint:
+
+```env
+OPENAI_API_KEY=twoj_klucz_gemini
+OPENAI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
+OPENAI_MODEL=gemini-3.5-flash
+```
 
 ## Uruchomienie
 
@@ -92,18 +106,101 @@ make db-up
 make backend-install
 make backend-migrate
 make backend-seed
+make backend-clear-sample-data
 make backend-dev
 make frontend-install
 make frontend-dev
 ```
 
+## Tryb produkcyjny
+
+Projekt zawiera produkcyjny Compose:
+
+- `backend/Dockerfile` dla FastAPI,
+- `frontend/Dockerfile` dla Next.js,
+- `docker-compose.prod.yml` z PostgreSQL, backendem, frontendem i Caddy,
+- `Caddyfile` jako reverse proxy pod jedną domeną,
+- `.env.production.example` jako wzór konfiguracji,
+- skrypty backup/restore bazy w `scripts/`.
+
+Przykład lokalny:
+
+```powershell
+Copy-Item .env.production.example .env.production
+docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build
+```
+
+Na VPS ustaw w `.env.production`:
+
+```env
+APP_DOMAIN=games.twojadomena.pl
+PUBLIC_APP_URL=https://games.twojadomena.pl
+POSTGRES_PASSWORD=dlugie-losowe-haslo
+```
+
+Caddy automatycznie obsłuży HTTPS dla prawdziwej domeny wskazującej na serwer. Frontend używa wtedy `/api`, więc telefon widzi jedną aplikację pod jednym adresem.
+
+Backup bazy:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/backup_database.ps1
+```
+
+Restore bazy:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/restore_database.ps1 -BackupPath backups/games-app-YYYYMMDD-HHMMSS.sql
+```
+
+Przywracanie nadpisuje dane w bazie, więc uruchamiaj je tylko świadomie.
+
+## PWA
+
+Aplikacja ma manifest, service worker i stronę offline. W produkcji po HTTPS można ją dodać do ekranu głównego telefonu.
+
+- Android/Chrome: przycisk instalacji w `Ustawienia` albo menu przeglądarki.
+- iPhone/Safari: `Udostępnij` -> `Do ekranu początkowego`.
+
+Service worker cache'uje shell aplikacji i zasoby statyczne. Endpointy `/api` są zawsze pobierane z sieci, żeby nie pokazywać nieaktualnych danych.
+
+## Troubleshooting
+
+### `DATABASE_UNAVAILABLE` albo błąd hasła PostgreSQL
+
+Jeśli backend pokazuje błąd podobny do `password authentication failed for user "games"`, to `DATABASE_URL` nie pasuje do hasła zapisanej bazy PostgreSQL albo backend trafia w inną lokalną instancję PostgreSQL. Najczęstsze przyczyny:
+
+- kontener PostgreSQL używa starego wolumenu utworzonego z innym `POSTGRES_PASSWORD`,
+- `backend/.env` ma inne hasło niż `docker-compose.yml` albo `.env.production`,
+- lokalnie działa inny PostgreSQL na porcie `5432`.
+
+Devowy `docker-compose.yml` wystawia PostgreSQL na porcie hosta `5433`, żeby ominąć typowy konflikt z lokalnym Postgresem na Windowsie:
+
+```env
+DATABASE_URL=postgresql+psycopg://games:games@localhost:5433/games_app
+```
+
+Po zmianie portu odtwórz kontener bez usuwania wolumenu:
+
+```powershell
+docker compose up -d --force-recreate postgres
+```
+
+Rozwiązanie bez kasowania danych: ustaw `DATABASE_URL` dokładnie pod istniejące hasło i port bazy. Rozwiązanie tylko dla pustej/dev bazy: zatrzymaj kontener i usuń wolumen PostgreSQL, a potem utwórz bazę od nowa.
+
 ## Seed danych
 
-Seed dodaje przykładowe gry, backlog, ligi PoE, postacie i statystyki walut. Skrypt nie dopisuje drugi raz danych, jeśli tabela `games` nie jest pusta.
+Seed nie dodaje przykładowych gier, postaci ani statystyk PoE. Tworzy tylko neutralne ustawienia startowe, np. ciemny motyw.
 
 ```powershell
 cd backend
 .\.venv\Scripts\python -m app.database.seed
+```
+
+Jeśli masz lokalną bazę utworzoną starszą wersją projektu, możesz usunąć dawne przykładowe rekordy seedowe:
+
+```powershell
+cd backend
+.\.venv\Scripts\python -m app.database.clear_sample_data
 ```
 
 ## Najważniejsze endpointy
@@ -117,6 +214,7 @@ cd backend
 - `POST /api/backlog/{id}/mark-playing`
 - `POST /api/backlog/{id}/mark-abandoned`
 - `GET/POST/PATCH/DELETE /api/poe/leagues`
+- `POST /api/poe/leagues/sync`
 - `GET/POST/PATCH/DELETE /api/poe/characters`
 - `POST /api/poe/import-from-ninja`
 - `GET/POST /api/poe/characters/{id}/stats`
@@ -139,4 +237,3 @@ Frontend ma przygotowany katalog `frontend/tests` pod przyszłe testy komponent�
 ## Bezpieczeństwo i prywatność
 
 Aplikacja jest jednoosobowa i prywatna. Mimo braku logowania backend waliduje wejście przez Pydantic, chatbot nie wykonuje raw SQL z prompta, a klucze API są czytane wyłącznie ze środowiska.
-

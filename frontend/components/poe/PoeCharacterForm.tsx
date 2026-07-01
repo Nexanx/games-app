@@ -35,7 +35,15 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>;
 
-export function PoeCharacterForm({ leagues, onAdded }: { leagues: PoeLeague[]; onAdded: () => void }) {
+export function PoeCharacterForm({
+  leagues,
+  onAdded,
+  onLeaguesChanged
+}: {
+  leagues: PoeLeague[];
+  onAdded: () => void;
+  onLeaguesChanged?: () => Promise<PoeLeague[]>;
+}) {
   const [message, setMessage] = useState<string | null>(null);
   const { register, handleSubmit, reset, setValue, watch, formState } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -65,6 +73,10 @@ export function PoeCharacterForm({ leagues, onAdded }: { leagues: PoeLeague[]; o
       if (imported.build_name) setValue("build_name", imported.build_name);
       if (imported.main_skill) setValue("main_skill", imported.main_skill);
       if (imported.profile_url) setValue("profile_url", imported.profile_url);
+      if (imported.league_id) {
+        await onLeaguesChanged?.();
+        setValue("league_id", String(imported.league_id));
+      }
       setValue("notes", imported.notes);
       setMessage(imported.notes ?? "Import przygotował dane do ręcznej weryfikacji.");
     } catch (err) {
@@ -101,7 +113,7 @@ export function PoeCharacterForm({ leagues, onAdded }: { leagues: PoeLeague[]; o
     <Card>
       <CardHeader>
         <CardTitle>Dodaj postać</CardTitle>
-        <CardDescription>Ręcznie albo z linkiem poe.ninja, jeśli dane da się bezpiecznie odczytać.</CardDescription>
+        <CardDescription>Import z poe.ninja może automatycznie utworzyć brakującą ligę z linku.</CardDescription>
       </CardHeader>
       <CardContent>
         <form className="space-y-3" onSubmit={handleSubmit(onSubmit)}>
@@ -195,4 +207,3 @@ function Field({ label, error, children }: { label: string; error?: string; chil
     </div>
   );
 }
-
