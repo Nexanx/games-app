@@ -1,6 +1,15 @@
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+BACKEND_DIR = Path(__file__).resolve().parents[2]
+PROJECT_ROOT = BACKEND_DIR.parent if BACKEND_DIR.name == "backend" else BACKEND_DIR
+ENV_FILES = (
+    PROJECT_ROOT / ".env.production",
+    PROJECT_ROOT / ".env",
+    BACKEND_DIR / ".env",
+)
 
 
 class Settings(BaseSettings):
@@ -14,7 +23,7 @@ class Settings(BaseSettings):
     openai_model: str | None = None
     frontend_url: str = "http://localhost:3000"
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(env_file=ENV_FILES, env_file_encoding="utf-8", extra="ignore")
 
 
 @lru_cache
