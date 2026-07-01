@@ -97,6 +97,57 @@ make frontend-install
 make frontend-dev
 ```
 
+## Tryb produkcyjny
+
+Projekt zawiera produkcyjny Compose:
+
+- `backend/Dockerfile` dla FastAPI,
+- `frontend/Dockerfile` dla Next.js,
+- `docker-compose.prod.yml` z PostgreSQL, backendem, frontendem i Caddy,
+- `Caddyfile` jako reverse proxy pod jedną domeną,
+- `.env.production.example` jako wzór konfiguracji,
+- skrypty backup/restore bazy w `scripts/`.
+
+Przykład lokalny:
+
+```powershell
+Copy-Item .env.production.example .env.production
+docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build
+```
+
+Na VPS ustaw w `.env.production`:
+
+```env
+APP_DOMAIN=games.twojadomena.pl
+PUBLIC_APP_URL=https://games.twojadomena.pl
+POSTGRES_PASSWORD=dlugie-losowe-haslo
+```
+
+Caddy automatycznie obsłuży HTTPS dla prawdziwej domeny wskazującej na serwer. Frontend używa wtedy `/api`, więc telefon widzi jedną aplikację pod jednym adresem.
+
+Backup bazy:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/backup_database.ps1
+```
+
+Restore bazy:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/restore_database.ps1 -BackupPath backups/games-app-YYYYMMDD-HHMMSS.sql
+```
+
+Przywracanie nadpisuje dane w bazie, więc uruchamiaj je tylko świadomie.
+
+## PWA
+
+Aplikacja ma manifest, service worker i stronę offline. W produkcji po HTTPS można ją dodać do ekranu głównego telefonu.
+
+- Android/Chrome: przycisk instalacji w `Ustawienia` albo menu przeglądarki.
+- iPhone/Safari: `Udostępnij` -> `Do ekranu początkowego`.
+
+Service worker cache'uje shell aplikacji i zasoby statyczne. Endpointy `/api` są zawsze pobierane z sieci, żeby nie pokazywać nieaktualnych danych.
+
 ## Seed danych
 
 Seed dodaje przykładowe gry, backlog, ligi PoE, postacie i statystyki walut. Skrypt nie dopisuje drugi raz danych, jeśli tabela `games` nie jest pusta.
@@ -139,4 +190,3 @@ Frontend ma przygotowany katalog `frontend/tests` pod przyszłe testy komponent�
 ## Bezpieczeństwo i prywatność
 
 Aplikacja jest jednoosobowa i prywatna. Mimo braku logowania backend waliduje wejście przez Pydantic, chatbot nie wykonuje raw SQL z prompta, a klucze API są czytane wyłącznie ze środowiska.
-

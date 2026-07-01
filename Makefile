@@ -1,4 +1,4 @@
-.PHONY: db-up db-down backend-install backend-migrate backend-seed backend-dev backend-test frontend-install frontend-dev frontend-build
+.PHONY: db-up db-down backend-install backend-migrate backend-seed backend-dev backend-test frontend-install frontend-dev frontend-build prod-build prod-up prod-down backup-db
 
 db-up:
 	docker compose up -d postgres
@@ -30,3 +30,14 @@ frontend-dev:
 frontend-build:
 	cd frontend && npm run build
 
+prod-build:
+	docker compose -f docker-compose.prod.yml build
+
+prod-up:
+	docker compose -f docker-compose.prod.yml up -d
+
+prod-down:
+	docker compose -f docker-compose.prod.yml down
+
+backup-db:
+	powershell -ExecutionPolicy Bypass -File scripts/backup_database.ps1

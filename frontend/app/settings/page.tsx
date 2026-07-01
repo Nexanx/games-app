@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Save, Server, ShieldCheck } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { InstallPwaButton } from "@/components/pwa/InstallPwaButton";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { LoadingState } from "@/components/ui/LoadingState";
@@ -95,6 +96,18 @@ export default function SettingsPage() {
 
       <Card>
         <CardHeader>
+          <CardTitle>Instalacja na telefonie</CardTitle>
+          <CardDescription>PWA działa najlepiej po HTTPS albo przez prywatny VPN/reverse proxy.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm text-muted-foreground">
+          <p>Na Androidzie przycisk instalacji pojawi się, gdy przeglądarka uzna aplikację za gotową do instalacji.</p>
+          <p>Na iPhonie użyj Safari: Udostępnij, a potem “Do ekranu początkowego”.</p>
+          <InstallPwaButton />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>Prywatna notatka</CardTitle>
           <CardDescription>Przykład ustawienia zapisywanego w tabeli `settings`.</CardDescription>
         </CardHeader>
@@ -124,4 +137,3 @@ export default function SettingsPage() {
     </div>
   );
 }
-
