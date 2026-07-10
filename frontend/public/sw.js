@@ -1,8 +1,8 @@
-const CACHE_VERSION = "games-poe-v1";
+const CACHE_VERSION = "games-poe-v2";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
-const APP_SHELL = ["/", "/games", "/poe", "/chatbot", "/settings", "/offline.html", "/manifest.webmanifest", "/icons/icon.svg"];
+const APP_SHELL = ["/", "/completed-games", "/backlog", "/poe", "/chatbot", "/settings", "/offline.html", "/manifest.webmanifest", "/icons/icon.svg"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(

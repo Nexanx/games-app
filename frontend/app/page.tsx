@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CheckCircle2, Clock3, Gamepad2, Gem, PauseCircle, Skull, Timer, Trophy } from "lucide-react";
+import { CheckCircle2, Gamepad2, Gem, PauseCircle, Timer, Trophy } from "lucide-react";
 import Link from "next/link";
 
 import { StatCard } from "@/components/dashboard/StatCard";
@@ -11,7 +11,7 @@ import { ErrorState } from "@/components/ui/ErrorState";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { api } from "@/services/api";
 import type { DashboardSummary } from "@/types";
-import { formatMinutes } from "@/lib/utils";
+import { formatHours, formatMinutes } from "@/lib/utils";
 
 export default function DashboardPage() {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
@@ -40,16 +40,14 @@ export default function DashboardPage() {
         <p className="text-sm font-semibold text-primary">Prywatny tracker</p>
         <h1 className="text-2xl font-bold leading-tight sm:text-3xl">Dashboard</h1>
         <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
-          Szybki obraz backlogu, czasu gry, postaci Path of Exile i najważniejszych dropów.
+          Szybki obraz historii ukończeń, listy Do ogrania, postaci Path of Exile i najważniejszych dropów.
         </p>
       </header>
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Do ogrania" value={summary.games.to_play} helper="Kolejka backlogu" icon={Gamepad2} />
-        <StatCard label="W trakcie" value={summary.games.playing} helper="Aktualnie ruszone" icon={Clock3} accent="text-sky-300" />
-        <StatCard label="Ukończone" value={summary.games.completed} helper="Zamknięte gry" icon={CheckCircle2} accent="text-emerald-300" />
-        <StatCard label="Porzucone" value={summary.games.abandoned} helper={`Wstrzymane: ${summary.games.paused}`} icon={Skull} accent="text-rose-300" />
-        <StatCard label="Łączny czas gier" value={formatMinutes(summary.total_game_playtime_minutes)} icon={Timer} accent="text-amber-300" />
+        <StatCard label="Do ogrania" value={summary.games.backlog} helper="Aktywna kolejka" icon={Gamepad2} />
+        <StatCard label="Ukończone" value={summary.games.completed} helper="Cała historia" icon={CheckCircle2} accent="text-emerald-300" />
+        <StatCard label="Łączny czas gier" value={formatHours(summary.total_game_playtime_hours)} icon={Timer} accent="text-amber-300" />
         <StatCard label="Postacie PoE" value={summary.poe_character_count} helper="PoE 1 i PoE 2" icon={Gem} accent="text-orange-300" />
         <StatCard label="Czas PoE 1" value={formatMinutes(summary.poe_playtime_by_version.poe1 ?? 0)} icon={PauseCircle} accent="text-cyan-300" />
         <StatCard label="Czas PoE 2" value={formatMinutes(summary.poe_playtime_by_version.poe2 ?? 0)} icon={Trophy} accent="text-lime-300" />
@@ -58,28 +56,28 @@ export default function DashboardPage() {
       <section className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
         <Card>
           <CardHeader>
-            <CardTitle>Ostatnio dodane gry</CardTitle>
-            <CardDescription>Najświeższe pozycje z backlogu.</CardDescription>
+            <CardTitle>Ostatnio dodane do listy</CardTitle>
+            <CardDescription>Najświeższe pozycje Do ogrania.</CardDescription>
           </CardHeader>
           <CardContent>
-            {summary.recent_added_games.length ? (
+            {summary.recent_backlog_entries.length ? (
               <div className="space-y-3">
-                {summary.recent_added_games.map((entry) => (
+                {summary.recent_backlog_entries.map((entry) => (
                   <Link
-                    href={`/games/${entry.id}`}
+                    href={`/backlog/${entry.id}`}
                     key={entry.id}
                     className="flex min-h-16 items-center justify-between gap-3 rounded-md border border-border bg-background/55 p-3 transition hover:border-accent/70"
                   >
                     <span className="min-w-0">
                       <span className="block truncate font-semibold">{entry.game.title}</span>
-                      <span className="text-sm text-muted-foreground">{entry.status} · {formatMinutes(entry.playtime_minutes)}</span>
+                      <span className="text-sm text-muted-foreground">{entry.preferred_platform || "Bez wybranej platformy"}</span>
                     </span>
-                    <span className="shrink-0 text-sm text-accent">{entry.completion_percent}%</span>
+                    <span className="shrink-0 text-sm text-accent">#{entry.position + 1}</span>
                   </Link>
                 ))}
               </div>
             ) : (
-              <EmptyState title="Brak gier" description="Dodaj pierwszą grę w zakładce Gry." />
+              <EmptyState title="Lista jest pusta" description="Dodaj pierwszą grę w zakładce Do ogrania." />
             )}
           </CardContent>
         </Card>
@@ -129,7 +127,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent className="space-y-2">
             {summary.recent_completed_games.length ? summary.recent_completed_games.map((entry) => (
-              <Link key={entry.id} href={`/games/${entry.id}`} className="block rounded-md bg-background/55 p-3 text-sm hover:bg-muted">
+              <Link key={entry.id} href={`/completed-games/entry/${entry.id}`} className="block rounded-md bg-background/55 p-3 text-sm hover:bg-muted">
                 {entry.game.title} · {entry.rating ? `${entry.rating}/10` : "bez oceny"}
               </Link>
             )) : <p className="text-sm text-muted-foreground">Jeszcze nic nie ukończono.</p>}
@@ -151,4 +149,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-

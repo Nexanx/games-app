@@ -1,29 +1,29 @@
-from collections import Counter
-
 from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session, selectinload
 
-from app.models import BacklogGame, PoeCharacter, PoeCurrencyStat, PoeLeague
-from app.schemas.dashboard import CurrencyHighlight, DashboardSummary, LeagueSummary, StatusCounts
+from app.models import BacklogEntry, CompletedGameEntry, PoeCharacter, PoeCurrencyStat, PoeLeague
+from app.schemas.dashboard import CurrencyHighlight, DashboardSummary, GamesSummary, LeagueSummary
 
 
 def build_dashboard_summary(session: Session) -> DashboardSummary:
-    backlog_entries = session.scalars(select(BacklogGame)).all()
-    status_counter = Counter(entry.status for entry in backlog_entries)
-
-    recent_added = session.scalars(
-        select(BacklogGame)
-        .options(selectinload(BacklogGame.game))
-        .order_by(desc(BacklogGame.created_at))
+    recent_backlog_entries = session.scalars(
+        select(BacklogEntry)
+        .options(selectinload(BacklogEntry.game))
+        .order_by(desc(BacklogEntry.created_at))
         .limit(5)
     ).all()
     recent_completed = session.scalars(
-        select(BacklogGame)
-        .options(selectinload(BacklogGame.game))
-        .where(BacklogGame.status == "completed")
-        .order_by(desc(BacklogGame.completed_at), desc(BacklogGame.updated_at))
+        select(CompletedGameEntry)
+        .options(
+            selectinload(CompletedGameEntry.game),
+            selectinload(CompletedGameEntry.custom_statistics),
+        )
+        .order_by(desc(CompletedGameEntry.completion_date), desc(CompletedGameEntry.updated_at))
         .limit(5)
     ).all()
+    backlog_count = session.scalar(select(func.count(BacklogEntry.id))) or 0
+    completed_count = session.scalar(select(func.count(CompletedGameEntry.id))) or 0
+    total_game_playtime_hours = session.scalar(select(func.sum(CompletedGameEntry.playtime_hours))) or 0
 
     characters = session.scalars(select(PoeCharacter).options(selectinload(PoeCharacter.league))).all()
     poe_playtime = {"poe1": 0, "poe2": 0}
@@ -55,15 +55,9 @@ def build_dashboard_summary(session: Session) -> DashboardSummary:
         )
 
     return DashboardSummary(
-        games=StatusCounts(
-            to_play=status_counter.get("to_play", 0),
-            playing=status_counter.get("playing", 0),
-            completed=status_counter.get("completed", 0),
-            abandoned=status_counter.get("abandoned", 0),
-            paused=status_counter.get("paused", 0),
-        ),
-        total_game_playtime_minutes=sum(entry.playtime_minutes for entry in backlog_entries),
-        recent_added_games=recent_added,
+        games=GamesSummary(backlog=backlog_count, completed=completed_count),
+        total_game_playtime_hours=float(total_game_playtime_hours),
+        recent_backlog_entries=recent_backlog_entries,
         recent_completed_games=recent_completed,
         poe_character_count=len(characters),
         recent_poe_characters=sorted(characters, key=lambda item: item.created_at, reverse=True)[:5],
@@ -79,4 +73,3 @@ def build_dashboard_summary(session: Session) -> DashboardSummary:
         ],
         latest_league=league_summary,
     )
-

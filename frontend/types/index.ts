@@ -1,5 +1,5 @@
-export type GameStatus = "to_play" | "playing" | "completed" | "abandoned" | "paused";
 export type PoeVersion = "poe1" | "poe2";
+export type StatisticValueType = "text" | "number" | "boolean";
 
 export interface Game {
   id: number;
@@ -20,29 +20,44 @@ export interface GameSearchResult extends Omit<Game, "id" | "created_at" | "upda
   source: string;
 }
 
-export interface BacklogGame {
+export interface BacklogEntry {
   id: number;
   game_id: number;
   game: Game;
-  status: GameStatus | string;
   position: number;
-  rating?: number | null;
-  playtime_minutes: number;
-  completion_percent: number;
-  started_at?: string | null;
-  completed_at?: string | null;
-  notes?: string | null;
+  preferred_platform?: string | null;
+  note?: string | null;
   created_at: string;
   updated_at: string;
 }
 
-export interface GameStat {
-  id: number;
-  backlog_game_id: number;
+export interface CustomStatistic {
+  id?: number;
+  completed_game_entry_id?: number;
   name: string;
-  value: number;
-  unit?: string | null;
-  notes?: string | null;
+  value: string;
+  value_type: StatisticValueType;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface CompletedGameEntry {
+  id: number;
+  game_id: number;
+  game: Game;
+  completion_date: string;
+  playtime_hours: number;
+  rating?: number | null;
+  platform?: string | null;
+  review?: string | null;
+  custom_statistics: CustomStatistic[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CompletedGamesYear {
+  year: number;
+  completed_games_count: number;
 }
 
 export interface PoeLeague {
@@ -106,10 +121,10 @@ export interface PoeCurrencyStat {
 }
 
 export interface DashboardSummary {
-  games: Record<GameStatus, number>;
-  total_game_playtime_minutes: number;
-  recent_added_games: BacklogGame[];
-  recent_completed_games: BacklogGame[];
+  games: { backlog: number; completed: number };
+  total_game_playtime_hours: number;
+  recent_backlog_entries: BacklogEntry[];
+  recent_completed_games: CompletedGameEntry[];
   poe_character_count: number;
   recent_poe_characters: PoeCharacter[];
   poe_playtime_by_version: Record<string, number>;

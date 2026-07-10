@@ -1,6 +1,6 @@
 # Games & Path of Exile Tracker
 
-Prywatna aplikacja webowa do zarządzania backlogiem gier, postaciami Path of Exile 1/2, statystykami dropów oraz chatbotem do pytań o zapisane dane.
+Prywatna aplikacja webowa do prowadzenia historii ukończonych gier, osobnej listy „Do ogrania”, postaci Path of Exile 1/2, statystyk dropów oraz chatbota do pytań o zapisane dane.
 
 Nie ma logowania, rejestracji, ról ani systemu kont. Next.js jest wyłącznie frontendem, a cała logika API, integracje, baza i chatbot są w backendzie FastAPI.
 
@@ -74,6 +74,28 @@ OPENAI_MODEL=gemini-3.5-flash
 ```
 
 ## Uruchomienie
+
+Najprościej uruchomić całą aplikację jednym skryptem PowerShell z katalogu głównego projektu:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\start_app.ps1
+```
+
+Skrypt sprawdza wymagane narzędzia, przygotowuje brakujące pliki konfiguracyjne, instaluje zależności, uruchamia PostgreSQL, wykonuje migracje i seed, a następnie uruchamia backend oraz frontend w jednym terminalu. `Ctrl+C` zatrzymuje oba procesy aplikacji (kontener bazy pozostaje uruchomiony).
+
+Przy kolejnych uruchomieniach można pominąć ponowną instalację zależności:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\start_app.ps1 -SkipInstall
+```
+
+Jeśli po poprzednim uruchomieniu porty `3000` albo `8000` nadal są zajęte, można zatrzymać stare procesy tej aplikacji podczas startu:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\start_app.ps1 -SkipInstall -StopExisting
+```
+
+Odpowiednik wykonywany ręcznie:
 
 ```powershell
 docker compose up -d postgres
@@ -210,9 +232,11 @@ cd backend
 - `GET /api/games`, `POST /api/games`, `GET/PATCH/DELETE /api/games/{id}`
 - `GET /api/backlog`, `POST /api/backlog`, `PATCH/DELETE /api/backlog/{id}`
 - `POST /api/backlog/reorder`
-- `POST /api/backlog/{id}/mark-completed`
-- `POST /api/backlog/{id}/mark-playing`
-- `POST /api/backlog/{id}/mark-abandoned`
+- `GET /api/completed-games/years`
+- `GET /api/completed-games?year=2026`
+- `GET/POST /api/completed-games`, `GET/PATCH/DELETE /api/completed-games/{id}`
+- `GET/POST /api/completed-games/{id}/statistics`
+- `PATCH/DELETE /api/completed-games/statistics/{id}`
 - `GET/POST/PATCH/DELETE /api/poe/leagues`
 - `POST /api/poe/leagues/sync`
 - `GET/POST/PATCH/DELETE /api/poe/characters`
@@ -232,7 +256,15 @@ cd backend
 .\.venv\Scripts\pytest
 ```
 
-Frontend ma przygotowany katalog `frontend/tests` pod przyszłe testy komponentów i e2e.
+Frontend:
+
+```powershell
+cd frontend
+npm test
+npm run lint
+npm run typecheck
+npm run build
+```
 
 ## Bezpieczeństwo i prywatność
 

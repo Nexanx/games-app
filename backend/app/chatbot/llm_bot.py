@@ -6,7 +6,7 @@ from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.config import Settings
-from app.models import BacklogGame, Game, PoeCharacter, PoeCurrencyStat, PoeLeague
+from app.models import BacklogEntry, CompletedGameEntry, Game, PoeCharacter, PoeCurrencyStat, PoeLeague
 
 
 class ChatbotConfigurationError(RuntimeError):
@@ -82,10 +82,19 @@ class OpenAICompatibleChatbot:
 
     def _build_context(self) -> dict[str, Any]:
         backlog_entries = self.session.scalars(
-            select(BacklogGame)
-            .options(selectinload(BacklogGame.game))
-            .join(BacklogGame.game)
-            .order_by(BacklogGame.position, Game.title)
+            select(BacklogEntry)
+            .options(selectinload(BacklogEntry.game))
+            .join(BacklogEntry.game)
+            .order_by(BacklogEntry.position, Game.title)
+            .limit(80)
+        ).all()
+        completed_entries = self.session.scalars(
+            select(CompletedGameEntry)
+            .options(
+                selectinload(CompletedGameEntry.game),
+                selectinload(CompletedGameEntry.custom_statistics),
+            )
+            .order_by(desc(CompletedGameEntry.completion_date), desc(CompletedGameEntry.created_at))
             .limit(80)
         ).all()
 
@@ -110,19 +119,32 @@ class OpenAICompatibleChatbot:
         ).all()
 
         return {
-            "games": [
+            "backlog": [
                 {
                     "title": entry.game.title,
-                    "status": entry.status,
                     "position": entry.position,
-                    "rating": entry.rating,
-                    "playtime_minutes": entry.playtime_minutes,
-                    "completion_percent": entry.completion_percent,
-                    "completed_at": entry.completed_at.isoformat() if entry.completed_at else None,
+                    "preferred_platform": entry.preferred_platform,
+                    "note": entry.note,
                     "genres": entry.game.genres,
                     "platforms": entry.game.platforms,
                 }
                 for entry in backlog_entries
+            ],
+            "completed_games": [
+                {
+                    "title": entry.game.title,
+                    "completion_date": entry.completion_date.isoformat(),
+                    "playtime_hours": entry.playtime_hours,
+                    "rating": entry.rating,
+                    "platform": entry.platform,
+                    "review": entry.review,
+                    "genres": entry.game.genres,
+                    "statistics": [
+                        {"name": statistic.name, "value": statistic.value, "type": statistic.value_type}
+                        for statistic in entry.custom_statistics
+                    ],
+                }
+                for entry in completed_entries
             ],
             "poe_leagues": [
                 {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
@@ -30,18 +30,18 @@ export default function PoeCharacterDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  async function load() {
+  const load = useCallback(async () => {
     setError(null);
     const [characterData, statsData] = await Promise.all([api.getCharacter(id), api.listPoeStats(id)]);
     setCharacter(characterData);
     setStats(statsData);
-  }
+  }, [id]);
 
   useEffect(() => {
     load()
       .catch((err) => setError(err instanceof Error ? err.message : "Nie udało się pobrać postaci"))
       .finally(() => setLoading(false));
-  }, [id]);
+  }, [load]);
 
   async function save() {
     if (!character) {
@@ -208,4 +208,3 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
     </div>
   );
 }
-

@@ -22,7 +22,9 @@ const schema = z.object({
   genres: z.string().optional(),
   platforms: z.string().optional(),
   external_url: z.string().optional(),
-  description: z.string().optional()
+  description: z.string().optional(),
+  preferred_platform: z.string().optional(),
+  note: z.string().optional()
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -47,7 +49,12 @@ export function GameForm({ onAdded }: { onAdded: () => void }) {
         external_url: values.external_url || null,
         description: values.description || null
       });
-      await api.createBacklog({ game_id: game.id, status: "to_play", position: 0 });
+      await api.createBacklog({
+        game_id: game.id,
+        position: 0,
+        preferred_platform: values.preferred_platform || splitList(values.platforms)[0] || null,
+        note: values.note || null
+      });
       reset();
       setMessage(`Dodano ręcznie: ${game.title}`);
       onAdded();
@@ -89,10 +96,18 @@ export function GameForm({ onAdded }: { onAdded: () => void }) {
           <Field label="Opis">
             <Textarea {...register("description")} placeholder="Krótki opis lub notatka" />
           </Field>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Preferowana platforma">
+              <Input {...register("preferred_platform")} placeholder="PC" />
+            </Field>
+            <Field label="Notatka na liście">
+              <Input {...register("note")} placeholder="Dlaczego chcę zagrać?" />
+            </Field>
+          </div>
           {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}
           <Button type="submit" className="w-full sm:w-auto">
             <Plus className="h-4 w-4" aria-hidden="true" />
-            Dodaj do backlogu
+            Dodaj do listy Do ogrania
           </Button>
         </form>
       </CardContent>

@@ -1,9 +1,10 @@
 from app.models.entities import (
-    BacklogGame,
+    BacklogEntry,
     ChatMessage,
     ChatSession,
     Game,
-    GameStat,
+    CompletedGameEntry,
+    CustomStatistic,
     PoeCharacter,
     PoeCurrencyStat,
     PoeLeague,
@@ -11,14 +12,14 @@ from app.models.entities import (
 )
 
 __all__ = [
-    "BacklogGame",
+    "BacklogEntry",
     "ChatMessage",
     "ChatSession",
     "Game",
-    "GameStat",
+    "CompletedGameEntry",
+    "CustomStatistic",
     "PoeCharacter",
     "PoeCurrencyStat",
     "PoeLeague",
     "Setting",
 ]
-

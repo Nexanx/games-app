@@ -44,7 +44,7 @@ export function GameSearch({ onAdded }: { onAdded: () => void }) {
         external_source: result.external_source || result.source,
         external_url: result.external_url
       });
-      await api.createBacklog({ game_id: game.id, status: "to_play", position: 0 });
+      await api.createBacklog({ game_id: game.id, position: 0, preferred_platform: game.platforms[0] || null });
       setMessage(`Dodano: ${game.title}`);
       onAdded();
     } catch (err) {
@@ -77,7 +77,7 @@ export function GameSearch({ onAdded }: { onAdded: () => void }) {
                 <p className="truncate font-semibold">{result.title}</p>
                 <p className="truncate text-xs text-muted-foreground">{result.genres.join(", ") || result.source}</p>
               </div>
-              <Button onClick={() => addResult(result)} title="Dodaj do backlogu">
+              <Button onClick={() => addResult(result)} title="Dodaj do listy Do ogrania">
                 <Plus className="h-4 w-4" aria-hidden="true" />
               </Button>
             </div>
