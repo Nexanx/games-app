@@ -4,19 +4,19 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { GameCard } from "@/components/games/GameCard";
 import { BacklogDragDropList } from "@/components/games/BacklogDragDropList";
 import { api } from "@/services/api";
-import type { BacklogGame } from "@/types";
+import type { BacklogEntry } from "@/types";
 
 export function BacklogList({
   entries,
   sortable,
   onChanged
 }: {
-  entries: BacklogGame[];
+  entries: BacklogEntry[];
   sortable: boolean;
-  onChanged: (entries?: BacklogGame[]) => void;
+  onChanged: (entries?: BacklogEntry[]) => void;
 }) {
   if (!entries.length) {
-    return <EmptyState title="Brak gier w tym widoku" description="Zmień filtr albo dodaj nową grę." />;
+    return <EmptyState title="Lista Do ogrania jest pusta" description="Wyszukaj grę albo dodaj ją ręcznie." />;
   }
 
   if (sortable) {
@@ -29,11 +29,8 @@ export function BacklogList({
         <GameCard
           key={entry.id}
           entry={entry}
-          onMark={async (id, action) => {
-            await api.markBacklog(id, action);
-            onChanged();
-          }}
           onDelete={async (id) => {
+            if (!window.confirm("Usunąć grę z listy Do ogrania?")) return;
             await api.deleteBacklog(id);
             onChanged();
           }}
@@ -42,4 +39,3 @@ export function BacklogList({
     </div>
   );
 }
-

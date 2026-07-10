@@ -7,14 +7,14 @@ import { CSS } from "@dnd-kit/utilities";
 
 import { GameCard } from "@/components/games/GameCard";
 import { api } from "@/services/api";
-import type { BacklogGame } from "@/types";
+import type { BacklogEntry } from "@/types";
 
 export function BacklogDragDropList({
   entries,
   onChanged
 }: {
-  entries: BacklogGame[];
-  onChanged: (entries?: BacklogGame[]) => void;
+  entries: BacklogEntry[];
+  onChanged: (entries?: BacklogEntry[]) => void;
 }) {
   const [items, setItems] = useState(entries);
   const sensors = useSensors(useSensor(PointerSensor), useSensor(TouchSensor));
@@ -39,7 +39,21 @@ export function BacklogDragDropList({
       <SortableContext items={items.map((item) => item.id)} strategy={verticalListSortingStrategy}>
         <div className="space-y-3">
           {items.map((entry) => (
-            <SortableGame key={entry.id} entry={entry} onChanged={onChanged} />
+            <SortableGame
+              key={entry.id}
+              entry={entry}
+              index={items.indexOf(entry)}
+              count={items.length}
+              onMove={async (direction) => {
+                const oldIndex = items.indexOf(entry);
+                const newIndex = direction === "up" ? oldIndex - 1 : oldIndex + 1;
+                if (newIndex < 0 || newIndex >= items.length) return;
+                const next = arrayMove(items, oldIndex, newIndex);
+                setItems(next);
+                onChanged(await api.reorderBacklog(next.map((item) => item.id)));
+              }}
+              onChanged={onChanged}
+            />
           ))}
         </div>
       </SortableContext>
@@ -47,7 +61,19 @@ export function BacklogDragDropList({
   );
 }
 
-function SortableGame({ entry, onChanged }: { entry: BacklogGame; onChanged: (entries?: BacklogGame[]) => void }) {
+function SortableGame({
+  entry,
+  index,
+  count,
+  onMove,
+  onChanged
+}: {
+  entry: BacklogEntry;
+  index: number;
+  count: number;
+  onMove: (direction: "up" | "down") => void;
+  onChanged: (entries?: BacklogEntry[]) => void;
+}) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: entry.id });
   const style = { transform: CSS.Transform.toString(transform), transition };
 
@@ -56,11 +82,11 @@ function SortableGame({ entry, onChanged }: { entry: BacklogGame; onChanged: (en
       <GameCard
         entry={entry}
         dragHandleProps={{ ...attributes, ...listeners }}
-        onMark={async (id, action) => {
-          await api.markBacklog(id, action);
-          onChanged();
-        }}
+        onMove={onMove}
+        disableMoveUp={index === 0}
+        disableMoveDown={index === count - 1}
         onDelete={async (id) => {
+          if (!window.confirm("Usunąć grę z listy Do ogrania?")) return;
           await api.deleteBacklog(id);
           onChanged();
         }}
@@ -68,4 +94,3 @@ function SortableGame({ entry, onChanged }: { entry: BacklogGame; onChanged: (en
     </div>
   );
 }
-

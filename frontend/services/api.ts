@@ -1,11 +1,13 @@
 import type {
-  BacklogGame,
+  BacklogEntry,
   ChatMessage,
   ChatSession,
   DashboardSummary,
   Game,
   GameSearchResult,
-  GameStat,
+  CompletedGameEntry,
+  CompletedGamesYear,
+  CustomStatistic,
   PoeCharacter,
   PoeCurrencyStat,
   PoeLeague,
@@ -84,19 +86,40 @@ export const api = {
   searchGames: (query: string) => request<GameSearchResult[]>(`/games/search${qs({ query })}`),
   createGame: (payload: Partial<Game>) =>
     request<Game>("/games", { method: "POST", body: JSON.stringify(payload) }),
+  listGames: () => request<Game[]>("/games"),
   listBacklog: (params: Record<string, QueryValue> = {}) =>
-    request<BacklogGame[]>(`/backlog${qs(params)}`),
-  getBacklog: (id: number) => request<BacklogGame>(`/backlog/${id}`),
-  createBacklog: (payload: Partial<BacklogGame> & { game_id: number }) =>
-    request<BacklogGame>("/backlog", { method: "POST", body: JSON.stringify(payload) }),
-  patchBacklog: (id: number, payload: Partial<BacklogGame>) =>
-    request<BacklogGame>(`/backlog/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
+    request<BacklogEntry[]>(`/backlog${qs(params)}`),
+  getBacklog: (id: number) => request<BacklogEntry>(`/backlog/${id}`),
+  createBacklog: (payload: Partial<BacklogEntry> & { game_id: number }) =>
+    request<BacklogEntry>("/backlog", { method: "POST", body: JSON.stringify(payload) }),
+  patchBacklog: (id: number, payload: Partial<BacklogEntry>) =>
+    request<BacklogEntry>(`/backlog/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
   deleteBacklog: (id: number) => request<void>(`/backlog/${id}`, { method: "DELETE" }),
-  markBacklog: (id: number, action: "mark-completed" | "mark-playing" | "mark-abandoned") =>
-    request<BacklogGame>(`/backlog/${id}/${action}`, { method: "POST" }),
   reorderBacklog: (ordered_ids: number[]) =>
-    request<BacklogGame[]>("/backlog/reorder", { method: "POST", body: JSON.stringify({ ordered_ids }) }),
-  listGameStats: (entryId: number) => request<GameStat[]>(`/backlog/${entryId}/stats`),
+    request<BacklogEntry[]>("/backlog/reorder", { method: "POST", body: JSON.stringify({ ordered_ids }) }),
+  listCompletedYears: () => request<CompletedGamesYear[]>("/completed-games/years"),
+  listCompletedGames: (year: number, month?: number) =>
+    request<CompletedGameEntry[]>(`/completed-games${qs({ year, month })}`),
+  getCompletedGame: (id: number) => request<CompletedGameEntry>(`/completed-games/${id}`),
+  createCompletedGame: (payload: Partial<CompletedGameEntry> & { game_id: number; backlog_entry_id?: number | null }) =>
+    request<CompletedGameEntry>("/completed-games", { method: "POST", body: JSON.stringify(payload) }),
+  patchCompletedGame: (id: number, payload: Partial<CompletedGameEntry>) =>
+    request<CompletedGameEntry>(`/completed-games/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  deleteCompletedGame: (id: number) => request<void>(`/completed-games/${id}`, { method: "DELETE" }),
+  listCustomStatistics: (entryId: number) =>
+    request<CustomStatistic[]>(`/completed-games/${entryId}/statistics`),
+  createCustomStatistic: (entryId: number, payload: Partial<CustomStatistic>) =>
+    request<CustomStatistic>(`/completed-games/${entryId}/statistics`, {
+      method: "POST",
+      body: JSON.stringify(payload)
+    }),
+  patchCustomStatistic: (id: number, payload: Partial<CustomStatistic>) =>
+    request<CustomStatistic>(`/completed-games/statistics/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload)
+    }),
+  deleteCustomStatistic: (id: number) =>
+    request<void>(`/completed-games/statistics/${id}`, { method: "DELETE" }),
   listLeagues: () => request<PoeLeague[]>("/poe/leagues"),
   createLeague: (payload: Partial<PoeLeague>) =>
     request<PoeLeague>("/poe/leagues", { method: "POST", body: JSON.stringify(payload) }),

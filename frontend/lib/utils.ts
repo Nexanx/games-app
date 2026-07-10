@@ -15,6 +15,11 @@ export function formatMinutes(minutes = 0) {
   return `${hours}h ${rest}min`;
 }
 
+export function formatHours(hours = 0) {
+  const formatted = new Intl.NumberFormat("pl-PL", { maximumFractionDigits: 2 }).format(Math.max(0, hours));
+  return `${formatted} godz.`;
+}
+
 export function splitList(value: string | undefined) {
   return (value ?? "")
     .split(",")
@@ -28,4 +33,3 @@ export function asDate(value?: string | null) {
   }
   return new Intl.DateTimeFormat("pl-PL").format(new Date(value));
 }
-

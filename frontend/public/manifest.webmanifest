@@ -1,7 +1,7 @@
 {
   "name": "Games & Path of Exile Tracker",
   "short_name": "Games PoE",
-  "description": "Prywatna aplikacja do backlogu gier i statystyk Path of Exile.",
+  "description": "Prywatna aplikacja do historii ukończonych gier, listy Do ogrania i statystyk Path of Exile.",
   "id": "/",
   "start_url": "/",
   "scope": "/",
@@ -21,9 +21,15 @@
   ],
   "shortcuts": [
     {
-      "name": "Gry",
-      "short_name": "Gry",
-      "url": "/games",
+      "name": "Ukończone gry",
+      "short_name": "Ukończone",
+      "url": "/completed-games",
+      "icons": [{ "src": "/icons/icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+    },
+    {
+      "name": "Do ogrania",
+      "short_name": "Do ogrania",
+      "url": "/backlog",
       "icons": [{ "src": "/icons/icon.svg", "sizes": "any", "type": "image/svg+xml" }]
     },
     {

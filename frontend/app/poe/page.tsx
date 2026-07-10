@@ -52,6 +52,8 @@ export default function PoePage() {
 
   useEffect(() => {
     load();
+    // Search is applied explicitly with Enter or the refresh button.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameVersion, leagueId, status, sort]);
 
   async function refreshLeagues() {
