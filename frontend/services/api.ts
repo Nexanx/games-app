@@ -2,6 +2,7 @@ import type {
   BacklogEntry,
   ChatMessage,
   ChatSession,
+  ChatStatus,
   DashboardSummary,
   Game,
   GameSearchResult,
@@ -12,8 +13,7 @@ import type {
   PoeCurrencyStat,
   PoeLeague,
   PoeLeagueSyncResult,
-  PoeNinjaImportResult,
-  Setting
+  PoeNinjaImportResult
 } from "@/types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api";
@@ -69,11 +69,11 @@ async function readApiError(response: Response) {
     if (typeof detail === "string") {
       return detail;
     }
-    if (detail?.code && detail?.message) {
-      return `${detail.code}: ${detail.message}`;
-    }
     if (detail?.message) {
       return detail.message;
+    }
+    if (detail?.code) {
+      return defaultMessage;
     }
     return JSON.stringify(payload) || defaultMessage;
   } catch {
@@ -160,9 +160,7 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ message, session_id })
     }),
+  chatStatus: () => request<ChatStatus>("/chat/status"),
   listChatSessions: () => request<ChatSession[]>("/chat/sessions"),
-  getChatSession: (id: number) => request<ChatSession>(`/chat/sessions/${id}`),
-  listSettings: () => request<Setting[]>("/settings"),
-  upsertSetting: (payload: { key: string; value: unknown }) =>
-    request<Setting>("/settings", { method: "PUT", body: JSON.stringify(payload) })
+  getChatSession: (id: number) => request<ChatSession>(`/chat/sessions/${id}`)
 };

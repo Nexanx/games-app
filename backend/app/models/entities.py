@@ -1,6 +1,4 @@
 from datetime import date, datetime
-from typing import Any
-
 from sqlalchemy import CheckConstraint, Date, DateTime, Float, ForeignKey, Integer, JSON, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -161,14 +159,3 @@ class ChatMessage(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     session: Mapped[ChatSession] = relationship(back_populates="messages")
-
-
-class Setting(Base):
-    __tablename__ = "settings"
-
-    id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    key: Mapped[str] = mapped_column(String(150), unique=True, nullable=False, index=True)
-    value: Mapped[dict[str, Any] | list[Any] | str | int | float | bool | None] = mapped_column(JSON)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
-    )

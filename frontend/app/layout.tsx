@@ -2,11 +2,12 @@ import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 
 import { AppLayout } from "@/components/layout/AppLayout";
+import { APP_DESCRIPTION, APP_NAME } from "@/lib/app-config";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Games & Path of Exile Tracker",
-  description: "Prywatny tracker gier, backlogu i statystyk Path of Exile.",
+  title: APP_NAME,
+  description: APP_DESCRIPTION,
   manifest: "/manifest.webmanifest"
 };
 

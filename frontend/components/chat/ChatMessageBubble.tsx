@@ -14,7 +14,7 @@ export function ChatMessageBubble({ message }: { message: ChatMessage }) {
       ) : null}
       <div
         className={cn(
-          "max-w-[86%] rounded-lg px-4 py-3 text-sm leading-6 shadow-sm sm:max-w-[72%]",
+          "max-w-[86%] whitespace-pre-wrap break-words rounded-lg px-4 py-3 text-sm leading-6 shadow-sm sm:max-w-[72%]",
           isUser ? "bg-primary text-primary-foreground" : "border border-border bg-card text-foreground"
         )}
       >
@@ -28,4 +28,3 @@ export function ChatMessageBubble({ message }: { message: ChatMessage }) {
     </div>
   );
 }
-
