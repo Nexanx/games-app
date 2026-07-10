@@ -1,88 +1,297 @@
 "use client";
 
-import { useState } from "react";
-import { Plus, Search } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ChevronLeft, ChevronRight, ListPlus, Loader2, Search } from "lucide-react";
 
+import { GameCover } from "@/components/games/GameCover";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  filterSearchResultsForBacklog,
+  getBatchFeedback,
+  getBatchSelectionKeys,
+  getSearchResultKey,
+  toggleSearchSelection,
+  type BacklogBatchItem,
+  type NormalizedBacklogBatchResult
+} from "@/lib/backlog-search";
 import { api } from "@/services/api";
-import type { GameSearchResult } from "@/types";
+import type { BacklogEntry, GameSearchPage, GameSearchResult } from "@/types";
 
-export function GameSearch({ onAdded }: { onAdded: () => void }) {
+type BacklogApiContract = {
+  searchGames: (query: string, page?: number) => Promise<GameSearchResult[] | GameSearchPage>;
+  createBacklogBatch: (payload: { games: GameSearchResult[] }) => Promise<unknown>;
+};
+
+const backlogApi = api as unknown as BacklogApiContract;
+
+function normalizeSearchResponse(response: GameSearchResult[] | GameSearchPage, requestedPage: number): GameSearchPage {
+  if (Array.isArray(response)) {
+    return { results: response, page: requestedPage, page_size: response.length, has_next: false };
+  }
+
+  return {
+    results: Array.isArray(response.results) ? response.results : [],
+    page: Number.isInteger(response.page) ? response.page : requestedPage,
+    page_size: Number.isInteger(response.page_size) ? response.page_size : response.results.length,
+    has_next: Boolean(response.has_next)
+  };
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" ? value as Record<string, unknown> : null;
+}
+
+function asText(value: unknown) {
+  return typeof value === "string" ? value : undefined;
+}
+
+function normalizeBatchItems(value: unknown): BacklogBatchItem[] {
+  if (!Array.isArray(value)) return [];
+
+  return value.flatMap((item) => {
+    const record = asRecord(item);
+    if (!record) return [];
+    const game = asRecord(record.game);
+    const title = asText(record.title) ?? asText(game?.title);
+    if (!title) return [];
+
+    return [{
+      title,
+      external_id: asText(record.external_id) ?? asText(game?.external_id),
+      external_source: asText(record.external_source) ?? asText(game?.external_source),
+      source: asText(record.source) ?? asText(game?.source),
+      message: asText(record.message) ?? asText(record.reason)
+    }];
+  });
+}
+
+function normalizeBatchResponse(response: unknown): NormalizedBacklogBatchResult {
+  const record = asRecord(response);
+  return {
+    added: normalizeBatchItems(record?.added),
+    already_exists: normalizeBatchItems(record?.already_exists),
+    failed: normalizeBatchItems(record?.failed)
+  };
+}
+
+export function GameSearch({
+  existingEntries,
+  onAdded
+}: {
+  existingEntries: BacklogEntry[];
+  onAdded: () => void | Promise<void>;
+}) {
   const [query, setQuery] = useState("");
+  const [submittedQuery, setSubmittedQuery] = useState("");
   const [results, setResults] = useState<GameSearchResult[]>([]);
+  const [page, setPage] = useState(1);
+  const [hasNext, setHasNext] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
+  const [selected, setSelected] = useState<Record<string, GameSearchResult>>({});
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [feedback, setFeedback] = useState<{ message: string; warning: boolean } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const requestId = useRef(0);
 
-  async function search() {
-    if (!query.trim()) {
-      return;
-    }
+  useEffect(() => {
+    setResults((current) => filterSearchResultsForBacklog(current, existingEntries));
+  }, [existingEntries]);
+
+  async function loadPage(queryValue: string, requestedPage: number) {
+    const currentRequestId = ++requestId.current;
     setLoading(true);
-    setMessage(null);
+    setError(null);
+
     try {
-      setResults(await api.searchGames(query));
+      let nextPage = requestedPage;
+      let response: GameSearchPage | null = null;
+      let visibleResults: GameSearchResult[] = [];
+
+      // If a whole server page is already on the backlog, skip it locally so
+      // users do not get trapped on an empty pagination page.
+      for (let skippedPages = 0; skippedPages < 12; skippedPages += 1) {
+        const payload = await backlogApi.searchGames(queryValue, nextPage);
+        if (currentRequestId !== requestId.current) return;
+
+        response = normalizeSearchResponse(payload, nextPage);
+        visibleResults = filterSearchResultsForBacklog(response.results, existingEntries);
+        if (visibleResults.length || !response.has_next) break;
+
+        nextPage = Math.max(response.page + 1, nextPage + 1);
+      }
+
+      if (!response || currentRequestId !== requestId.current) return;
+      setResults(visibleResults);
+      setPage(response.page);
+      setHasNext(response.has_next);
+      setHasSearched(true);
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Błąd wyszukiwania");
+      if (currentRequestId === requestId.current) {
+        setError(err instanceof Error ? err.message : "Nie udało się wyszukać gier w RAWG.");
+      }
     } finally {
-      setLoading(false);
+      if (currentRequestId === requestId.current) {
+        setLoading(false);
+      }
     }
   }
 
-  async function addResult(result: GameSearchResult) {
-    setMessage(null);
+  function startSearch() {
+    const nextQuery = query.trim();
+    if (!nextQuery) return;
+
+    setSubmittedQuery(nextQuery);
+    setSelected({});
+    setFeedback(null);
+    void loadPage(nextQuery, 1);
+  }
+
+  function changePage(nextPage: number) {
+    if (!submittedQuery || nextPage < 1) return;
+    setFeedback(null);
+    void loadPage(submittedQuery, nextPage);
+  }
+
+  async function addSelected() {
+    const selectedGames = Object.values(selected);
+    if (!selectedGames.length || submitting) return;
+
+    setSubmitting(true);
+    setError(null);
+    setFeedback(null);
+
     try {
-      const game = await api.createGame({
-        title: result.title,
-        description: result.description,
-        cover_url: result.cover_url,
-        release_date: result.release_date,
-        genres: result.genres,
-        platforms: result.platforms,
-        external_id: result.external_id,
-        external_source: result.external_source || result.source,
-        external_url: result.external_url
-      });
-      await api.createBacklog({ game_id: game.id, position: 0, preferred_platform: game.platforms[0] || null });
-      setMessage(`Dodano: ${game.title}`);
-      onAdded();
+      const batch = normalizeBatchResponse(await backlogApi.createBacklogBatch({ games: selectedGames }));
+      const processedKeys = getBatchSelectionKeys(
+        [...batch.added, ...batch.already_exists],
+        selected
+      );
+      const warning = Boolean(batch.failed.length || batch.already_exists.length);
+
+      setFeedback({ message: getBatchFeedback(batch), warning });
+      if (processedKeys.size) {
+        setResults((current) => current.filter((game) => !processedKeys.has(getSearchResultKey(game))));
+        setSelected((current) => Object.fromEntries(
+          Object.entries(current).filter(([key]) => !processedKeys.has(key))
+        ));
+      }
+
+      if (batch.added.length || batch.already_exists.length) {
+        void Promise.resolve(onAdded()).catch(() => undefined);
+      }
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Nie udało się dodać gry");
+      setError(err instanceof Error ? err.message : "Nie udało się dodać zaznaczonych gier do listy.");
+    } finally {
+      setSubmitting(false);
     }
   }
+
+  const selectedCount = Object.keys(selected).length;
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Wyszukaj grę</CardTitle>
-        <CardDescription>Wyszukiwanie korzysta z RAWG i wymaga skonfigurowanego klucza API.</CardDescription>
+        <CardTitle>Wyszukaj gry</CardTitle>
+        <CardDescription>
+          Zaznacz kilka wyników RAWG, aby dodać je do listy „Do ogrania” jedną operacją.
+        </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className="space-y-4">
         <div className="flex flex-col gap-2 sm:flex-row">
-          <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Wpisz tytuł gry" onKeyDown={(event) => event.key === "Enter" && search()} />
-          <Button onClick={search} disabled={loading}>
-            <Search className="h-4 w-4" aria-hidden="true" />
+          <Input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Wpisz tytuł gry"
+            aria-label="Tytuł wyszukiwanej gry"
+            onKeyDown={(event) => event.key === "Enter" && startSearch()}
+          />
+          <Button type="button" onClick={startSearch} disabled={loading || !query.trim()}>
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Search className="h-4 w-4" aria-hidden="true" />}
             Szukaj
           </Button>
         </div>
-        {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}
-        <div className="space-y-2">
-          {results.map((result) => (
-            <div key={`${result.external_source}-${result.external_id}-${result.title}`} className="flex items-center gap-3 rounded-md border border-border bg-background/55 p-2">
-              <div className="h-14 w-14 shrink-0 overflow-hidden rounded-md bg-muted">
-                {result.cover_url ? <img src={result.cover_url} alt={result.title} className="h-full w-full object-cover" /> : null}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-semibold">{result.title}</p>
-                <p className="truncate text-xs text-muted-foreground">{result.genres.join(", ") || result.source}</p>
-              </div>
-              <Button onClick={() => addResult(result)} title="Dodaj do listy Do ogrania">
-                <Plus className="h-4 w-4" aria-hidden="true" />
+
+        <div className="flex flex-col gap-2 rounded-md border border-border bg-background/45 p-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-muted-foreground" aria-live="polite">
+            Zaznaczono: <strong className="text-foreground">{selectedCount}</strong>
+          </p>
+          <Button type="button" onClick={addSelected} disabled={!selectedCount || submitting}>
+            {submitting ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <ListPlus className="h-4 w-4" aria-hidden="true" />}
+            Dodaj zaznaczone ({selectedCount})
+          </Button>
+        </div>
+
+        {feedback ? (
+          <p
+            className={feedback.warning ? "text-sm text-amber-200" : "text-sm text-emerald-300"}
+            role="status"
+          >
+            {feedback.message}
+          </p>
+        ) : null}
+        {error ? <p className="rounded-md bg-destructive/15 p-3 text-sm text-destructive" role="alert">{error}</p> : null}
+
+        {loading ? <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />Wyszukiwanie RAWG…</p> : null}
+
+        {!loading && hasSearched && !results.length ? (
+          <p className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">
+            Brak nowych gier możliwych do dodania dla tego zapytania.
+          </p>
+        ) : null}
+
+        {results.length ? (
+          <div className="space-y-2" aria-label="Wyniki wyszukiwania RAWG">
+            {results.map((result, index) => {
+              const key = getSearchResultKey(result);
+              const inputId = `rawg-result-${page}-${index}`;
+              const isSelected = Boolean(selected[key]);
+
+              return (
+                <div
+                  key={key}
+                  className={
+                    isSelected
+                      ? "flex items-center gap-3 rounded-md border border-accent bg-accent/10 p-2"
+                      : "flex items-center gap-3 rounded-md border border-border bg-background/55 p-2"
+                  }
+                >
+                  <input
+                    id={inputId}
+                    type="checkbox"
+                    checked={isSelected}
+                    onChange={() => setSelected((current) => toggleSearchSelection(current, result))}
+                    className="h-5 w-5 shrink-0 accent-primary"
+                    aria-label={`Zaznacz grę ${result.title}`}
+                  />
+                  <label htmlFor={inputId} className="flex min-w-0 flex-1 cursor-pointer items-center gap-3">
+                    <GameCover src={result.cover_url} title={result.title} variant="thumbnail" className="h-16 w-12 shrink-0" />
+                    <span className="min-w-0">
+                      <span className="block truncate font-semibold">{result.title}</span>
+                      <span className="block truncate text-xs text-muted-foreground">{result.genres.join(", ") || result.source}</span>
+                    </span>
+                  </label>
+                </div>
+              );
+            })}
+          </div>
+        ) : null}
+
+        {hasSearched ? (
+          <div className="flex items-center justify-between gap-3 border-t border-border pt-3">
+            <span className="text-sm text-muted-foreground">Strona {page}</span>
+            <div className="flex gap-2">
+              <Button type="button" variant="secondary" onClick={() => changePage(page - 1)} disabled={loading || page <= 1}>
+                <ChevronLeft className="h-4 w-4" aria-hidden="true" /> Poprzednia
+              </Button>
+              <Button type="button" variant="secondary" onClick={() => changePage(page + 1)} disabled={loading || !hasNext}>
+                Następna <ChevronRight className="h-4 w-4" aria-hidden="true" />
               </Button>
             </div>
-          ))}
-        </div>
+          </div>
+        ) : null}
       </CardContent>
     </Card>
   );

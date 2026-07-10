@@ -20,6 +20,13 @@ export interface GameSearchResult extends Omit<Game, "id" | "created_at" | "upda
   source: string;
 }
 
+export interface GameSearchPage {
+  results: GameSearchResult[];
+  page: number;
+  page_size: number;
+  has_next: boolean;
+}
+
 export interface BacklogEntry {
   id: number;
   game_id: number;
@@ -58,6 +65,87 @@ export interface CompletedGameEntry {
 export interface CompletedGamesYear {
   year: number;
   completed_games_count: number;
+}
+
+export interface CompletedGamesFilters {
+  month?: number;
+  platform?: string[];
+  genre?: string[];
+  rating_min?: number;
+  rating_max?: number;
+}
+
+export interface CompletedGameHighlight {
+  id: number;
+  title: string;
+  completion_date: string;
+  playtime_hours: number;
+  rating?: number | null;
+  cover_url?: string | null;
+}
+
+export interface CompletedGamesMonthSummary {
+  month: number;
+  completed_games_count: number;
+  total_playtime_hours: number;
+  average_rating?: number | null;
+}
+
+export interface CompletedGamesFilterOptions {
+  platforms: string[];
+  genres: string[];
+}
+
+export interface CompletedGamesYearDashboard {
+  year: number;
+  completed_games_count: number;
+  total_playtime_hours: number;
+  average_playtime_hours?: number | null;
+  average_rating?: number | null;
+  best_rated_game?: CompletedGameHighlight | null;
+  longest_game?: CompletedGameHighlight | null;
+  active_months_count: number;
+  monthly: CompletedGamesMonthSummary[];
+  filter_options: CompletedGamesFilterOptions;
+}
+
+export interface CompletedGamesComparisonYear {
+  year: number;
+  completed_games_count: number;
+  total_playtime_hours: number;
+  average_playtime_hours?: number | null;
+  average_rating?: number | null;
+  monthly: CompletedGamesMonthSummary[];
+}
+
+export interface CompletedGamesComparison {
+  years: CompletedGamesComparisonYear[];
+}
+
+export interface BacklogBatchItem {
+  title: string;
+  external_id?: string | null;
+  external_source?: string | null;
+  source?: string | null;
+  message?: string | null;
+}
+
+export interface BacklogBatchResult {
+  added: BacklogEntry[];
+  already_exists: BacklogBatchItem[];
+  failed: BacklogBatchItem[];
+}
+
+export interface BackupDocument {
+  format_version: number;
+  exported_at: string;
+  app_name: string;
+  data: Record<string, unknown>;
+}
+
+export interface BackupImportResult {
+  mode: "replace";
+  restored: Record<string, number>;
 }
 
 export interface PoeLeague {
@@ -158,4 +246,19 @@ export interface ChatStatus {
   configured: boolean;
   missing: string[];
   message: string;
+}
+
+export interface ChatErrorDetail {
+  code:
+    | "llm_not_configured"
+    | "llm_auth_error"
+    | "llm_timeout"
+    | "llm_rate_limited"
+    | "llm_provider_unavailable"
+    | "llm_network_error"
+    | "llm_invalid_response"
+    | "llm_internal_error";
+  message: string;
+  error_id: string;
+  missing?: string[];
 }

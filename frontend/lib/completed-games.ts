@@ -21,6 +21,13 @@ export type CompletedGamesMonthGroup = {
   entries: CompletedGameEntry[];
 };
 
+export type CompletedYearFilters = {
+  platforms: string[];
+  genres: string[];
+  ratingMin?: number;
+  ratingMax?: number;
+};
+
 export function groupCompletedGamesByMonth(entries: CompletedGameEntry[]): CompletedGamesMonthGroup[] {
   const grouped = new Map<number, CompletedGameEntry[]>();
   [...entries]
@@ -49,4 +56,42 @@ export function todayAsInputValue(now = new Date()) {
   const month = String(now.getMonth() + 1).padStart(2, "0");
   const day = String(now.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+export function currentCompletedGamesYear(now = new Date()) {
+  return now.getFullYear();
+}
+
+export function completedYearFiltersFromSearchParams(params: Pick<URLSearchParams, "get" | "getAll">): CompletedYearFilters {
+  const ratingMin = parseRating(params.get("rating_min"));
+  const ratingMax = parseRating(params.get("rating_max"));
+  return {
+    platforms: uniqueValues(params.getAll("platform")),
+    genres: uniqueValues(params.getAll("genre")),
+    ratingMin,
+    ratingMax
+  };
+}
+
+export function completedYearFiltersToSearchParams(filters: CompletedYearFilters) {
+  const params = new URLSearchParams();
+  uniqueValues(filters.platforms).forEach((platform) => params.append("platform", platform));
+  uniqueValues(filters.genres).forEach((genre) => params.append("genre", genre));
+  if (filters.ratingMin !== undefined) params.set("rating_min", String(filters.ratingMin));
+  if (filters.ratingMax !== undefined) params.set("rating_max", String(filters.ratingMax));
+  return params;
+}
+
+export function hasCompletedYearFilters(filters: CompletedYearFilters) {
+  return Boolean(filters.platforms.length || filters.genres.length || filters.ratingMin !== undefined || filters.ratingMax !== undefined);
+}
+
+function uniqueValues(values: string[]) {
+  return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
+}
+
+function parseRating(value: string | null) {
+  if (value === null || value.trim() === "") return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 && parsed <= 10 ? parsed : undefined;
 }

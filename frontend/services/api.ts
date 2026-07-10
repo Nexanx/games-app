@@ -1,10 +1,17 @@
 import type {
   BacklogEntry,
+  BacklogBatchResult,
+  BackupDocument,
+  BackupImportResult,
   ChatMessage,
   ChatSession,
   ChatStatus,
+  CompletedGamesComparison,
+  CompletedGamesFilters,
+  CompletedGamesYearDashboard,
   DashboardSummary,
   Game,
+  GameSearchPage,
   GameSearchResult,
   CompletedGameEntry,
   CompletedGamesYear,
@@ -18,12 +25,17 @@ import type {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api";
 
-type QueryValue = string | number | boolean | null | undefined;
+type QueryScalar = string | number | boolean;
+type QueryValue = QueryScalar | QueryScalar[] | null | undefined;
 
 function qs(params: Record<string, QueryValue>) {
   const searchParams = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {
-    if (value !== undefined && value !== null && value !== "") {
+    if (Array.isArray(value)) {
+      value.forEach((item) => {
+        if (item !== "") searchParams.append(key, String(item));
+      });
+    } else if (value !== undefined && value !== null && value !== "") {
       searchParams.set(key, String(value));
     }
   });
@@ -47,7 +59,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   if (!response.ok) {
-    throw new Error(await readApiError(response));
+    throw await readApiError(response);
   }
 
   if (response.status === 204) {
@@ -57,33 +69,48 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-async function readApiError(response: Response) {
+export class ApiError extends Error {
+  code?: string;
+  errorId?: string;
+  status: number;
+
+  constructor(message: string, { code, errorId, status }: { code?: string; errorId?: string; status: number }) {
+    super(message);
+    this.name = "ApiError";
+    this.code = code;
+    this.errorId = errorId;
+    this.status = status;
+  }
+}
+
+async function readApiError(response: Response): Promise<ApiError> {
   const defaultMessage = `API error ${response.status}`;
   const text = await response.text();
   if (!text) {
-    return defaultMessage;
+    return new ApiError(defaultMessage, { status: response.status });
   }
   try {
     const payload = JSON.parse(text);
     const detail = payload?.detail;
     if (typeof detail === "string") {
-      return detail;
+      return new ApiError(detail, { status: response.status });
     }
     if (detail?.message) {
-      return detail.message;
+      return new ApiError(detail.message, { code: detail.code, errorId: detail.error_id, status: response.status });
     }
     if (detail?.code) {
-      return defaultMessage;
+      return new ApiError(defaultMessage, { code: detail.code, errorId: detail.error_id, status: response.status });
     }
-    return JSON.stringify(payload) || defaultMessage;
+    return new ApiError(JSON.stringify(payload) || defaultMessage, { status: response.status });
   } catch {
-    return text || defaultMessage;
+    return new ApiError(text || defaultMessage, { status: response.status });
   }
 }
 
 export const api = {
   dashboard: () => request<DashboardSummary>("/dashboard/summary"),
-  searchGames: (query: string) => request<GameSearchResult[]>(`/games/search${qs({ query })}`),
+  searchGames: (query: string, page = 1, pageSize = 10) =>
+    request<GameSearchPage>(`/games/search${qs({ query, page, page_size: pageSize })}`),
   createGame: (payload: Partial<Game>) =>
     request<Game>("/games", { method: "POST", body: JSON.stringify(payload) }),
   listGames: () => request<Game[]>("/games"),
@@ -92,14 +119,20 @@ export const api = {
   getBacklog: (id: number) => request<BacklogEntry>(`/backlog/${id}`),
   createBacklog: (payload: Partial<BacklogEntry> & { game_id: number }) =>
     request<BacklogEntry>("/backlog", { method: "POST", body: JSON.stringify(payload) }),
+  createBacklogBatch: (payload: { games: GameSearchResult[] }) =>
+    request<BacklogBatchResult>("/backlog/batch", { method: "POST", body: JSON.stringify(payload) }),
   patchBacklog: (id: number, payload: Partial<BacklogEntry>) =>
     request<BacklogEntry>(`/backlog/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
   deleteBacklog: (id: number) => request<void>(`/backlog/${id}`, { method: "DELETE" }),
   reorderBacklog: (ordered_ids: number[]) =>
     request<BacklogEntry[]>("/backlog/reorder", { method: "POST", body: JSON.stringify({ ordered_ids }) }),
   listCompletedYears: () => request<CompletedGamesYear[]>("/completed-games/years"),
-  listCompletedGames: (year: number, month?: number) =>
-    request<CompletedGameEntry[]>(`/completed-games${qs({ year, month })}`),
+  listCompletedGames: (year: number, filters: CompletedGamesFilters = {}) =>
+    request<CompletedGameEntry[]>(`/completed-games${qs({ year, ...filters })}`),
+  getCompletedYearDashboard: (year: number) =>
+    request<CompletedGamesYearDashboard>(`/completed-games/year/${year}/dashboard`),
+  compareCompletedYears: (years: number[]) =>
+    request<CompletedGamesComparison>(`/completed-games/comparison${qs({ years: years.join(",") })}`),
   getCompletedGame: (id: number) => request<CompletedGameEntry>(`/completed-games/${id}`),
   createCompletedGame: (payload: Partial<CompletedGameEntry> & { game_id: number; backlog_entry_id?: number | null }) =>
     request<CompletedGameEntry>("/completed-games", { method: "POST", body: JSON.stringify(payload) }),
@@ -120,6 +153,9 @@ export const api = {
     }),
   deleteCustomStatistic: (id: number) =>
     request<void>(`/completed-games/statistics/${id}`, { method: "DELETE" }),
+  exportBackup: () => request<BackupDocument>("/backup/export"),
+  importBackup: (payload: { mode: "replace"; backup: BackupDocument }) =>
+    request<BackupImportResult>("/backup/import", { method: "POST", body: JSON.stringify(payload) }),
   listLeagues: () => request<PoeLeague[]>("/poe/leagues"),
   createLeague: (payload: Partial<PoeLeague>) =>
     request<PoeLeague>("/poe/leagues", { method: "POST", body: JSON.stringify(payload) }),

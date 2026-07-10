@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.database.session import get_session
 from app.models import BacklogEntry, CompletedGameEntry, CustomStatistic, Game
+from app.schemas.completed_games import CompletedGamesComparisonRead, CompletedGamesYearDashboardRead
 from app.schemas.games import (
     CompletedGameEntryCreate,
     CompletedGameEntryRead,
@@ -15,6 +16,12 @@ from app.schemas.games import (
     CustomStatisticInput,
     CustomStatisticRead,
     CustomStatisticUpdate,
+)
+from app.services.completed_games_service import (
+    build_comparison,
+    build_year_dashboard,
+    filter_completed_entries,
+    get_completed_entries_for_year,
 )
 
 router = APIRouter()
@@ -38,14 +45,54 @@ def list_completed_years(db: Session = Depends(get_session)) -> list[CompletedGa
 def list_completed_games(
     year: int = Query(..., ge=1900, le=9998),
     month: int | None = Query(default=None, ge=1, le=12),
+    platform: list[str] | None = Query(default=None),
+    genre: list[str] | None = Query(default=None),
+    rating_min: float | None = Query(default=None, ge=0, le=10),
+    rating_max: float | None = Query(default=None, ge=0, le=10),
     db: Session = Depends(get_session),
 ) -> list[CompletedGameEntry]:
+    if rating_min is not None and rating_max is not None and rating_min > rating_max:
+        raise HTTPException(status_code=422, detail="rating_min cannot be greater than rating_max")
     start, end = _date_range(year, month)
-    return db.scalars(
+    entries = db.scalars(
         _entry_query()
         .where(CompletedGameEntry.completion_date >= start, CompletedGameEntry.completion_date < end)
         .order_by(desc(CompletedGameEntry.completion_date), desc(CompletedGameEntry.created_at))
     ).all()
+    return filter_completed_entries(
+        entries,
+        platforms=platform or [],
+        genres=genre or [],
+        rating_min=rating_min,
+        rating_max=rating_max,
+    )
+
+
+@router.get("/year/{year}/dashboard", response_model=CompletedGamesYearDashboardRead)
+def get_completed_games_year_dashboard(
+    year: int,
+    db: Session = Depends(get_session),
+) -> CompletedGamesYearDashboardRead:
+    if year < 1900 or year > 9998:
+        raise HTTPException(status_code=422, detail="Invalid year")
+    return build_year_dashboard(year, get_completed_entries_for_year(db, year))
+
+
+@router.get("/comparison", response_model=CompletedGamesComparisonRead)
+def compare_completed_games(
+    years: str = Query(..., min_length=1, max_length=99),
+    db: Session = Depends(get_session),
+) -> CompletedGamesComparisonRead:
+    try:
+        parsed_years = [int(value.strip()) for value in years.split(",") if value.strip()]
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="years must be a comma separated list of years") from exc
+    unique_years = sorted(set(parsed_years), reverse=True)
+    if len(unique_years) < 2:
+        raise HTTPException(status_code=422, detail="Select at least two distinct years")
+    if len(unique_years) > 8 or any(year < 1900 or year > 9998 for year in unique_years):
+        raise HTTPException(status_code=422, detail="Invalid years selection")
+    return build_comparison(db, unique_years)
 
 
 @router.post("", response_model=CompletedGameEntryRead, status_code=201)

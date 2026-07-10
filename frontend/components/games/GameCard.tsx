@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { ArrowDown, ArrowUp, Check, ExternalLink, GripVertical, Pencil, Trash2 } from "lucide-react";
 
+import { GameCover } from "@/components/games/GameCover";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import type { BacklogEntry } from "@/types";
@@ -25,15 +26,11 @@ export function GameCard({
   return (
     <Card className="overflow-hidden">
       <CardContent className="grid gap-4 p-3 sm:grid-cols-[112px_1fr] sm:p-4">
-        <div className="relative aspect-[4/3] overflow-hidden rounded-md border border-border bg-muted sm:aspect-[3/4]">
-          {entry.game.cover_url ? (
-            <img src={entry.game.cover_url} alt={entry.game.title} className="h-full w-full object-cover" />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-800 via-emerald-950 to-amber-950 text-xs text-muted-foreground">
-              Brak okładki
-            </div>
-          )}
-        </div>
+        <GameCover
+          src={entry.game.cover_url}
+          title={entry.game.title}
+          className="h-40 w-[120px] sm:h-auto sm:w-full"
+        />
         <div className="min-w-0 space-y-3">
           <div className="flex items-start gap-2">
             {dragHandleProps ? (

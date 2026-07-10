@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Check, Save, Trash2 } from "lucide-react";
 
+import { GameCover } from "@/components/games/GameCover";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -38,9 +39,7 @@ export default function BacklogDetailsPage() {
         Wróć do listy
       </Link>
       <section className="grid gap-5 lg:grid-cols-[280px_1fr]">
-        <div className="aspect-[3/4] overflow-hidden rounded-lg border border-border bg-muted">
-          {entry.game.cover_url ? <img src={entry.game.cover_url} alt={entry.game.title} className="h-full w-full object-cover" /> : null}
-        </div>
+        <GameCover src={entry.game.cover_url} title={entry.game.title} variant="detail" className="rounded-lg" />
         <Card>
           <CardHeader>
             <CardTitle>{entry.game.title}</CardTitle>

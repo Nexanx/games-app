@@ -41,7 +41,17 @@ class GameRead(GameBase):
 
 
 class GameSearchResult(GameBase):
+    external_source: str = "RAWG"
     source: str = "RAWG"
+
+
+class GameSearchPage(BaseModel):
+    """A client page of games that can still be added to the backlog."""
+
+    results: list[GameSearchResult] = Field(default_factory=list)
+    page: int = Field(..., ge=1)
+    page_size: int = Field(..., ge=1)
+    has_next: bool = False
 
 
 class BacklogEntryBase(BaseModel):
@@ -68,6 +78,32 @@ class BacklogEntryRead(BacklogEntryBase):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class BacklogBatchCreate(BaseModel):
+    games: list[GameSearchResult] = Field(..., min_length=1, max_length=50)
+
+
+class BacklogBatchItemResult(BaseModel):
+    title: str
+    external_id: str | None = None
+    external_source: str
+    status: Literal["added", "already_exists"]
+    reason: Literal["already_on_backlog", "duplicate_in_request"] | None = None
+    entry: BacklogEntryRead
+
+
+class BacklogBatchFailure(BaseModel):
+    title: str
+    external_id: str | None = None
+    external_source: str
+    reason: str
+
+
+class BacklogBatchRead(BaseModel):
+    added: list[BacklogEntryRead] = Field(default_factory=list)
+    already_exists: list[BacklogBatchItemResult] = Field(default_factory=list)
+    failed: list[BacklogBatchFailure] = Field(default_factory=list)
 
 
 class BacklogReorder(BaseModel):

@@ -5,6 +5,7 @@ import { CheckCircle2, Gamepad2, Gem, PauseCircle, Timer, Trophy } from "lucide-
 import Link from "next/link";
 
 import { StatCard } from "@/components/dashboard/StatCard";
+import { BackupManager } from "@/components/backup/BackupManager";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -52,6 +53,17 @@ export default function DashboardPage() {
         <StatCard label="Czas PoE 1" value={formatMinutes(summary.poe_playtime_by_version.poe1 ?? 0)} icon={PauseCircle} accent="text-cyan-300" />
         <StatCard label="Czas PoE 2" value={formatMinutes(summary.poe_playtime_by_version.poe2 ?? 0)} icon={Trophy} accent="text-lime-300" />
       </section>
+
+      <BackupManager
+        onImported={async () => {
+          try {
+            setSummary(await api.dashboard());
+            setError(null);
+          } catch (cause) {
+            setError(cause instanceof Error ? cause.message : "Nie udało się odświeżyć danych po imporcie.");
+          }
+        }}
+      />
 
       <section className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
         <Card>
