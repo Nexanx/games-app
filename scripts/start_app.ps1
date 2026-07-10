@@ -149,7 +149,7 @@ function Start-ChildProcess {
     return $Process
 }
 
-Write-Host "Games & Path of Exile Tracker - uruchamianie" -ForegroundColor Green
+Write-Host "Games Tracker - uruchamianie" -ForegroundColor Green
 
 $DockerCommand = Find-Executable -Names @("docker.exe", "docker") `
     -InstallHint "Nie znaleziono Docker CLI. Zainstaluj i uruchom Docker Desktop."

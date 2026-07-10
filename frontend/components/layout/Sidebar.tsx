@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { Sparkles } from "lucide-react";
 
 import { navItems } from "@/components/layout/nav-items";
+import { APP_NAME } from "@/lib/app-config";
 import { cn } from "@/lib/utils";
 
 export function Sidebar() {
@@ -18,8 +19,8 @@ export function Sidebar() {
             <Sparkles className="h-5 w-5" aria-hidden="true" />
           </span>
           <span>
-            <span className="block text-sm font-semibold">Games & PoE</span>
-            <span className="text-xs text-muted-foreground">private tracker</span>
+            <span className="block text-sm font-semibold">{APP_NAME}</span>
+            <span className="text-xs text-muted-foreground">gry i statystyki</span>
           </span>
         </Link>
         <nav className="mt-6 space-y-1">
@@ -41,11 +42,7 @@ export function Sidebar() {
             );
           })}
         </nav>
-        <div className="mt-auto rounded-lg border border-border bg-card p-4 text-xs leading-5 text-muted-foreground">
-          Prywatna aplikacja bez kont, logowania i ról. Dane zapisuje lokalny backend FastAPI.
-        </div>
       </div>
     </aside>
   );
 }
-

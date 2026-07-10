@@ -1,4 +1,4 @@
-# Games & Path of Exile Tracker
+# Games Tracker
 
 Prywatna aplikacja webowa do prowadzenia historii ukończonych gier, osobnej listy „Do ogrania”, postaci Path of Exile 1/2, statystyk dropów oraz chatbota do pytań o zapisane dane.
 
@@ -57,7 +57,7 @@ FRONTEND_URL=http://localhost:3000
 NEXT_PUBLIC_API_URL=http://localhost:8000/api
 ```
 
-`RAWG_API_KEY` jest wymagany do wyszukiwania gier. `OPENAI_API_KEY` i `OPENAI_MODEL` są wymagane do odpowiedzi chatbota. Jeśli konfiguracji brakuje albo zewnętrzne API zwróci błąd, backend zwróci jawny kod błędu 503/502 zamiast używać mocków.
+`RAWG_API_KEY` jest wymagany do wyszukiwania gier. `OPENAI_API_KEY` i `OPENAI_MODEL` są wymagane do odpowiedzi chatbota. Jeśli konfiguracji brakuje albo zewnętrzne API zwróci błąd, backend zwróci jawny kod błędu 503/502 zamiast używać mocków. Frontend sprawdza `GET /api/chat/status` i wyświetla czytelny komunikat, gdy chatbot nie jest gotowy.
 
 Przy ręcznym dodawaniu gry możesz wpisać sam tytuł. Jeśli `cover_url` jest puste, backend spróbuje pobrać okładkę i brakujące metadane z RAWG. Gdy RAWG nie jest skonfigurowany albo nie zwróci okładki, API zwróci jawny błąd zamiast zapisać rekord z danymi zastępczymi.
 
@@ -180,7 +180,7 @@ Przywracanie nadpisuje dane w bazie, więc uruchamiaj je tylko świadomie.
 
 Aplikacja ma manifest, service worker i stronę offline. W produkcji po HTTPS można ją dodać do ekranu głównego telefonu.
 
-- Android/Chrome: przycisk instalacji w `Ustawienia` albo menu przeglądarki.
+- Android/Chrome: przycisk instalacji w menu przeglądarki, jeżeli aplikacja spełnia wymagania PWA.
 - iPhone/Safari: `Udostępnij` -> `Do ekranu początkowego`.
 
 Service worker cache'uje shell aplikacji i zasoby statyczne. Endpointy `/api` są zawsze pobierane z sieci, żeby nie pokazywać nieaktualnych danych.
@@ -211,7 +211,7 @@ Rozwiązanie bez kasowania danych: ustaw `DATABASE_URL` dokładnie pod istnieją
 
 ## Seed danych
 
-Seed nie dodaje przykładowych gier, postaci ani statystyk PoE. Tworzy tylko neutralne ustawienia startowe, np. ciemny motyw.
+Seed nie dodaje przykładowych gier, postaci ani statystyk PoE. Obecnie jest neutralnym krokiem startowym, który można bezpiecznie uruchamiać po migracjach.
 
 ```powershell
 cd backend
@@ -245,6 +245,7 @@ cd backend
 - `PATCH/DELETE /api/poe/stats/{id}`
 - `POST /api/poe/characters/{id}/stats/reorder`
 - `POST /api/chat`
+- `GET /api/chat/status`
 - `GET /api/chat/sessions`
 
 ## Testy

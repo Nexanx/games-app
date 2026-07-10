@@ -6,7 +6,7 @@ from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.config import Settings
-from app.models import BacklogEntry, CompletedGameEntry, Game, PoeCharacter, PoeCurrencyStat, PoeLeague
+from app.models import BacklogEntry, ChatMessage, CompletedGameEntry, Game, PoeCharacter, PoeCurrencyStat, PoeLeague
 
 
 class ChatbotConfigurationError(RuntimeError):
@@ -22,7 +22,7 @@ class OpenAICompatibleChatbot:
         self.session = session
         self.settings = settings
 
-    def answer(self, question: str) -> str:
+    def answer(self, question: str, session_id: int | None = None) -> str:
         if not self.settings.openai_api_key:
             raise ChatbotConfigurationError("OPENAI_API_KEY is not configured.")
         if not self.settings.openai_model:
@@ -32,28 +32,35 @@ class OpenAICompatibleChatbot:
         endpoint = f"{base_url}/chat/completions"
         context = self._build_context()
 
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "Jesteś prywatnym asystentem aplikacji do gier i Path of Exile. "
+                    "Odpowiadasz po polsku, krótko i konkretnie. Korzystaj wyłącznie z danych "
+                    "w przekazanym kontekście JSON oraz historii tej rozmowy. Jeśli brakuje danych, powiedz to wprost. "
+                    "Nie wymyślaj rekordów, nie sugeruj wykonywania SQL i nie modyfikuj danych."
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    "Kontekst danych aplikacji:\n"
+                    f"{json.dumps(context, ensure_ascii=False)}\n\n"
+                    "Odpowiadaj tylko na podstawie tego kontekstu i historii rozmowy poniżej."
+                ),
+            },
+        ]
+        conversation_messages = self._build_conversation_messages(session_id)
+        if conversation_messages:
+            messages.extend(conversation_messages)
+        else:
+            messages.append({"role": "user", "content": question})
+
         payload = {
             "model": self.settings.openai_model,
             "temperature": 0.2,
-            "messages": [
-                {
-                    "role": "system",
-                    "content": (
-                        "Jesteś prywatnym asystentem aplikacji do gier i Path of Exile. "
-                        "Odpowiadasz po polsku, krótko i konkretnie. Korzystaj wyłącznie z danych "
-                        "w przekazanym kontekście JSON. Jeśli brakuje danych, powiedz to wprost. "
-                        "Nie wymyślaj rekordów, nie sugeruj wykonywania SQL i nie modyfikuj danych."
-                    ),
-                },
-                {
-                    "role": "user",
-                    "content": (
-                        "Kontekst danych aplikacji:\n"
-                        f"{json.dumps(context, ensure_ascii=False)}\n\n"
-                        f"Pytanie użytkownika: {question}"
-                    ),
-                },
-            ],
+            "messages": messages,
         }
 
         try:
@@ -79,6 +86,22 @@ class OpenAICompatibleChatbot:
         if not isinstance(content, str) or not content.strip():
             raise ChatbotRequestError("LLM provider returned an empty response.")
         return content.strip()
+
+    def _build_conversation_messages(self, session_id: int | None) -> list[dict[str, str]]:
+        if not session_id:
+            return []
+
+        rows = self.session.scalars(
+            select(ChatMessage)
+            .where(ChatMessage.session_id == session_id)
+            .order_by(desc(ChatMessage.created_at), desc(ChatMessage.id))
+            .limit(12)
+        ).all()
+
+        return [
+            {"role": message.role if message.role in {"user", "assistant"} else "user", "content": message.content}
+            for message in reversed(rows)
+        ]
 
     def _build_context(self) -> dict[str, Any]:
         backlog_entries = self.session.scalars(

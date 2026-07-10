@@ -13,7 +13,7 @@ ENV_FILES = (
 
 
 class Settings(BaseSettings):
-    app_name: str = "Games & Path of Exile Tracker"
+    app_name: str = "Games Tracker"
     database_url: str = "postgresql+psycopg://games:games@localhost:5433/games_app"
     rawg_api_key: str | None = None
     igdb_client_id: str | None = None

@@ -154,9 +154,8 @@ export interface ChatSession {
   messages?: ChatMessage[];
 }
 
-export interface Setting {
-  id: number;
-  key: string;
-  value: unknown;
-  updated_at: string;
+export interface ChatStatus {
+  configured: boolean;
+  missing: string[];
+  message: string;
 }

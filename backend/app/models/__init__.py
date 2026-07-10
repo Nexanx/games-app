@@ -8,7 +8,6 @@ from app.models.entities import (
     PoeCharacter,
     PoeCurrencyStat,
     PoeLeague,
-    Setting,
 )
 
 __all__ = [
@@ -21,5 +20,4 @@ __all__ = [
     "PoeCharacter",
     "PoeCurrencyStat",
     "PoeLeague",
-    "Setting",
 ]

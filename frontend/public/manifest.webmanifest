@@ -1,7 +1,7 @@
 {
-  "name": "Games & Path of Exile Tracker",
-  "short_name": "Games PoE",
-  "description": "Prywatna aplikacja do historii ukończonych gier, listy Do ogrania i statystyk Path of Exile.",
+  "name": "Games Tracker",
+  "short_name": "Games",
+  "description": "Tracker historii ukończonych gier, listy Do ogrania i statystyk Path of Exile.",
   "id": "/",
   "start_url": "/",
   "scope": "/",

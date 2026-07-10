@@ -13,15 +13,14 @@ export const suggestedQuestions = [
   "Porównaj moje statystyki PoE 1 i PoE 2."
 ];
 
-export function SuggestedQuestions({ onPick }: { onPick: (question: string) => void }) {
+export function SuggestedQuestions({ disabled = false, onPick }: { disabled?: boolean; onPick: (question: string) => void }) {
   return (
     <div className="flex gap-2 overflow-x-auto pb-1">
       {suggestedQuestions.map((question) => (
-        <Button key={question} variant="secondary" className="shrink-0" onClick={() => onPick(question)}>
+        <Button key={question} variant="secondary" className="shrink-0" onClick={() => onPick(question)} disabled={disabled}>
           {question}
         </Button>
       ))}
     </div>
   );
 }
-
