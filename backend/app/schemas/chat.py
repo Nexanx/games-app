@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -49,3 +50,22 @@ class ChatStatusResponse(BaseModel):
     configured: bool
     missing: list[str]
     message: str
+
+
+ChatbotErrorCode = Literal[
+    "llm_not_configured",
+    "llm_auth_error",
+    "llm_timeout",
+    "llm_rate_limited",
+    "llm_provider_unavailable",
+    "llm_network_error",
+    "llm_invalid_response",
+    "llm_internal_error",
+]
+
+
+class ChatErrorDetail(BaseModel):
+    code: ChatbotErrorCode
+    message: str
+    error_id: str
+    missing: list[str] | None = None

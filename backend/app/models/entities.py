@@ -1,5 +1,18 @@
 from datetime import date, datetime
-from sqlalchemy import CheckConstraint, Date, DateTime, Float, ForeignKey, Integer, JSON, String, Text, UniqueConstraint, func
+from sqlalchemy import (
+    CheckConstraint,
+    Date,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    JSON,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base
@@ -25,6 +38,13 @@ class Game(Base, TimestampMixin):
     external_id: Mapped[str | None] = mapped_column(String(255), index=True)
     external_source: Mapped[str] = mapped_column(String(50), default="manual", nullable=False)
     external_url: Mapped[str | None] = mapped_column(String(1000))
+    __table_args__ = (
+        Index(
+            "ix_games_external_identity_normalized",
+            func.lower(func.trim(external_source)),
+            func.lower(func.trim(external_id)),
+        ),
+    )
 
     backlog_entry: Mapped["BacklogEntry | None"] = relationship(back_populates="game", cascade="all, delete-orphan")
     completed_entries: Mapped[list["CompletedGameEntry"]] = relationship(

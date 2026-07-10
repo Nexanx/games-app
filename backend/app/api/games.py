@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -6,16 +6,29 @@ from app.core.config import get_settings
 from app.database.session import get_session
 from app.integrations.game_provider import GameProvider, GameProviderConfigurationError, GameProviderRequestError
 from app.models import Game
-from app.schemas.games import GameCreate, GameRead, GameSearchResult, GameUpdate
+from app.schemas.games import GameCreate, GameRead, GameSearchPage, GameSearchResult, GameUpdate
+from app.services.backlog_service import (
+    filter_games_not_on_backlog,
+    find_game_by_external_identity,
+    find_game_by_title_without_external_identity,
+    get_backlog_identity_index,
+    normalize_external_key,
+    normalize_game_title,
+)
 
 router = APIRouter()
 
 
-@router.get("/search", response_model=list[GameSearchResult])
-async def search_games(query: str = Query(..., min_length=1, max_length=100)) -> list[GameSearchResult]:
+@router.get("/search", response_model=GameSearchPage)
+async def search_games(
+    query: str = Query(..., min_length=1, max_length=100),
+    page: int = Query(1, ge=1, le=50),
+    page_size: int = Query(10, ge=1, le=20),
+    db: Session = Depends(get_session),
+) -> GameSearchPage:
     provider = GameProvider(get_settings())
     try:
-        return await provider.search(query)
+        return await _search_available_games(provider, query, page, page_size, db)
     except GameProviderConfigurationError as exc:
         raise HTTPException(
             status_code=503,
@@ -34,11 +47,24 @@ def list_games(db: Session = Depends(get_session)) -> list[Game]:
 
 
 @router.post("", response_model=GameRead, status_code=201)
-async def create_game(payload: GameCreate, db: Session = Depends(get_session)) -> Game:
+async def create_game(
+    payload: GameCreate,
+    response: Response,
+    db: Session = Depends(get_session),
+) -> Game:
     data = payload.model_dump()
+    existing = _find_existing_game(db, data)
+    if existing:
+        response.status_code = 200
+        return existing
     if not data.get("cover_url"):
         result = await _find_cover_result(payload.title)
         data = _merge_provider_data(data, result)
+
+    existing = _find_existing_game(db, data)
+    if existing:
+        response.status_code = 200
+        return existing
 
     game = Game(**data)
     db.add(game)
@@ -79,7 +105,7 @@ def delete_game(game_id: int, db: Session = Depends(get_session)) -> None:
 async def _find_cover_result(title: str) -> GameSearchResult:
     provider = GameProvider(get_settings())
     try:
-        results = await provider.search(title)
+        page = await provider.search(title)
     except GameProviderConfigurationError as exc:
         raise HTTPException(
             status_code=503,
@@ -97,7 +123,7 @@ async def _find_cover_result(title: str) -> GameSearchResult:
             },
         ) from exc
 
-    result = _select_cover_result(results, title)
+    result = _select_cover_result(page.results, title)
     if not result:
         raise HTTPException(
             status_code=404,
@@ -136,3 +162,65 @@ def _merge_provider_data(data: dict, result: GameSearchResult) -> dict:
     if not merged.get("external_url") and result.external_url:
         merged["external_url"] = result.external_url
     return merged
+
+
+async def _search_available_games(
+    provider: GameProvider,
+    query: str,
+    page: int,
+    page_size: int,
+    db: Session,
+) -> GameSearchPage:
+    """Build a logical results page after excluding active backlog games.
+
+    RAWG paginates before the application can know which results are already
+    queued.  We consume only as many provider pages as needed to assemble the
+    requested client page plus one extra result, which makes ``has_next``
+    accurate without exposing empty pages caused by filtering.
+    """
+
+    identities = get_backlog_identity_index(db)
+    start = (page - 1) * page_size
+    end = start + page_size
+    available: list[GameSearchResult] = []
+    seen_keys: set[tuple[str, str] | tuple[str, str, str]] = set()
+    raw_page = 1
+
+    while True:
+        provider_page = await provider.search(query, page=raw_page, page_size=page_size)
+        for result in filter_games_not_on_backlog(provider_page.results, identities):
+            result_key = _search_result_key(result)
+            if result_key in seen_keys:
+                continue
+            seen_keys.add(result_key)
+            available.append(result)
+
+        if len(available) > end or not provider_page.has_next:
+            break
+        raw_page += 1
+
+    return GameSearchPage(
+        results=available[start:end],
+        page=page,
+        page_size=page_size,
+        has_next=len(available) > end,
+    )
+
+
+def _search_result_key(result: GameSearchResult) -> tuple[str, str] | tuple[str, str, str]:
+    external_key = normalize_external_key(result.external_source, result.external_id)
+    if external_key:
+        return external_key
+    return ("title", normalize_game_title(result.title), result.external_source.strip().casefold())
+
+
+def _find_existing_game(db: Session, data: dict) -> Game | None:
+    existing = find_game_by_external_identity(db, data.get("external_source"), data.get("external_id"))
+    if existing:
+        return existing
+    if normalize_external_key(data.get("external_source"), data.get("external_id")):
+        return find_game_by_title_without_external_identity(db, data["title"])
+    # A manually entered game has no stable provider ID, so reuse only a
+    # locally manual title match. This keeps direct manual additions from
+    # producing a second active backlog entry for the same game.
+    return find_game_by_title_without_external_identity(db, data["title"])

@@ -1,14 +1,14 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { AlertCircle, Loader2, Send } from "lucide-react";
+import { AlertCircle, Loader2, RotateCcw, Send } from "lucide-react";
 
 import { ChatMessageBubble } from "@/components/chat/ChatMessageBubble";
 import { SuggestedQuestions } from "@/components/chat/SuggestedQuestions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { canSendChatMessage, getChatbotErrorMessage } from "@/lib/chatbot";
+import { canSendChatMessage, getChatbotErrorDetails, type ChatbotErrorDetails } from "@/lib/chatbot";
 import { api } from "@/services/api";
 import type { ChatMessage, ChatStatus } from "@/types";
 
@@ -27,7 +27,8 @@ export function ChatWindow() {
   const [loading, setLoading] = useState(false);
   const [statusLoading, setStatusLoading] = useState(true);
   const [chatStatus, setChatStatus] = useState<ChatStatus | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [chatError, setChatError] = useState<ChatbotErrorDetails | null>(null);
+  const [lastQuestion, setLastQuestion] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -39,10 +40,14 @@ export function ChatWindow() {
       .chatStatus()
       .then((status) => {
         setChatStatus(status);
-        setError(status.configured ? null : status.message);
+        setChatError(status.configured ? null : { code: null, errorId: null, message: status.message });
       })
       .catch(() => {
-        setError("Nie udało się sprawdzić konfiguracji chatbota. Sprawdź, czy backend działa.");
+        setChatError({
+          code: null,
+          errorId: null,
+          message: "Nie udało się sprawdzić konfiguracji chatbota. Sprawdź, czy backend działa."
+        });
         setChatStatus({ configured: false, missing: [], message: "Backend chatbota jest niedostępny." });
       })
       .finally(() => setStatusLoading(false));
@@ -54,7 +59,8 @@ export function ChatWindow() {
       return;
     }
     setInput("");
-    setError(null);
+    setChatError(null);
+    setLastQuestion(question);
     const userMessage: ChatMessage = {
       id: -Date.now(),
       session_id: sessionId ?? 0,
@@ -68,16 +74,17 @@ export function ChatWindow() {
       const response = await api.chat(question, sessionId);
       setSessionId(response.session_id);
       setMessages((current) => [...current, response.message]);
+      setLastQuestion(null);
     } catch (err) {
-      const message = getChatbotErrorMessage(err);
-      setError(message);
+      const errorDetails = getChatbotErrorDetails(err);
+      setChatError(errorDetails);
       setMessages((current) => [
         ...current,
         {
           id: -Date.now() - 1,
           session_id: sessionId ?? 0,
           role: "assistant",
-          content: message,
+          content: errorDetails.message,
           created_at: new Date().toISOString()
         }
       ]);
@@ -93,6 +100,7 @@ export function ChatWindow() {
 
   const configured = chatStatus?.configured === true;
   const sendingDisabled = !canSendChatMessage(input, configured, loading || statusLoading);
+  const canRetry = Boolean(lastQuestion) && configured && !loading && !statusLoading && chatError?.code !== "llm_not_configured";
   const inputPlaceholder = statusLoading
     ? "Sprawdzam konfigurację chatbota..."
     : configured
@@ -102,10 +110,26 @@ export function ChatWindow() {
   return (
     <div className="space-y-4">
       <SuggestedQuestions disabled={!configured || loading || statusLoading} onPick={send} />
-      {error ? (
-        <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+      {chatError ? (
+        <div
+          className="flex flex-col items-stretch gap-3 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive sm:flex-row sm:items-start"
+          role="alert"
+        >
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-          <p>{error}</p>
+          <div className="min-w-0 flex-1">
+            <p>{chatError.message}</p>
+            {chatError.errorId ? (
+              <p className="mt-1 text-xs text-destructive/80">
+                Identyfikator błędu: <code>{chatError.errorId}</code>
+              </p>
+            ) : null}
+          </div>
+          {canRetry ? (
+            <Button type="button" variant="secondary" className="shrink-0" onClick={() => lastQuestion && void send(lastQuestion)}>
+              <RotateCcw className="h-4 w-4" aria-hidden="true" />
+              Ponów
+            </Button>
+          ) : null}
         </div>
       ) : null}
       <Card className="overflow-hidden">

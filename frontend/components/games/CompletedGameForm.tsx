@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Search, Save } from "lucide-react";
 
 import { CustomStatisticsFields } from "@/components/games/CustomStatisticsFields";
+import { GameCover } from "@/components/games/GameCover";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -83,7 +84,7 @@ export function CompletedGameForm({ entry }: { entry?: CompletedGameEntry }) {
     setSearching(true);
     setError(null);
     try {
-      setResults(await api.searchGames(query));
+      setResults((await api.searchGames(query)).results);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Nie udało się wyszukać gry");
     } finally {
@@ -217,7 +218,13 @@ export function CompletedGameForm({ entry }: { entry?: CompletedGameEntry }) {
                         className="flex w-full items-center gap-3 rounded-md p-2 text-left hover:bg-muted"
                         onClick={() => chooseResult(result)}
                       >
-                        <span className="h-12 w-12 shrink-0 overflow-hidden rounded bg-muted">{result.cover_url ? <img src={result.cover_url} alt="" className="h-full w-full object-cover" /> : null}</span>
+                        <GameCover
+                          src={result.cover_url}
+                          title={result.title}
+                          alt=""
+                          variant="thumbnail"
+                          className="h-12 w-9 shrink-0 rounded"
+                        />
                         <span className="min-w-0"><strong className="block truncate">{result.title}</strong><span className="block truncate text-xs text-muted-foreground">{result.genres.join(", ")}</span></span>
                       </button>
                     ))}

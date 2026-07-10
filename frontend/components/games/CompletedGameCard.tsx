@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { CalendarDays, Clock3, Star } from "lucide-react";
 
+import { GameCover } from "@/components/games/GameCover";
 import { Card, CardContent } from "@/components/ui/card";
 import { asDate, formatHours } from "@/lib/utils";
 import type { CompletedGameEntry } from "@/types";
@@ -10,13 +11,7 @@ export function CompletedGameCard({ entry }: { entry: CompletedGameEntry }) {
     <Link href={`/completed-games/entry/${entry.id}`} className="block focus:outline-none focus:ring-2 focus:ring-ring">
       <Card className="overflow-hidden transition hover:border-accent/70">
         <CardContent className="grid gap-4 p-3 sm:grid-cols-[88px_1fr] sm:p-4">
-          <div className="aspect-[3/4] overflow-hidden rounded-md bg-muted">
-            {entry.game.cover_url ? (
-              <img src={entry.game.cover_url} alt={entry.game.title} className="h-full w-full object-cover" />
-            ) : (
-              <div className="flex h-full items-center justify-center px-2 text-center text-xs text-muted-foreground">Brak okładki</div>
-            )}
-          </div>
+          <GameCover src={entry.game.cover_url} title={entry.game.title} />
           <div className="min-w-0">
             <h3 className="truncate text-lg font-semibold">{entry.game.title}</h3>
             <div className="mt-3 grid gap-2 text-sm sm:grid-cols-3">

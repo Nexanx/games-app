@@ -1,80 +1,369 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, Filter, Plus, X } from "lucide-react";
 
+import { CompletedYearDashboard } from "@/components/games/CompletedYearDashboard";
+import { CompletedYearsComparison } from "@/components/games/CompletedYearsComparison";
 import { CompletedGameCard } from "@/components/games/CompletedGameCard";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { Input } from "@/components/ui/input";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { Select } from "@/components/ui/select";
-import { getAvailableYearNavigation, groupCompletedGamesByMonth } from "@/lib/completed-games";
+import {
+  completedYearFiltersFromSearchParams,
+  completedYearFiltersToSearchParams,
+  getAvailableYearNavigation,
+  groupCompletedGamesByMonth,
+  hasCompletedYearFilters,
+  type CompletedYearFilters
+} from "@/lib/completed-games";
 import { api } from "@/services/api";
-import type { CompletedGameEntry, CompletedGamesYear } from "@/types";
+import type {
+  CompletedGameEntry,
+  CompletedGamesComparison,
+  CompletedGamesYear,
+  CompletedGamesYearDashboard
+} from "@/types";
+
+const emptyFilters: CompletedYearFilters = { platforms: [], genres: [] };
 
 export default function CompletedGamesYearPage() {
   const { year: yearParam } = useParams<{ year: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const year = Number(yearParam);
+  const validYear = Number.isInteger(year) && year >= 1900 && year <= 9998;
+  const filterQuery = searchParams.toString();
+  const filters = useMemo(
+    () => completedYearFiltersFromSearchParams(searchParams),
+    // The URL, not the mutable ReadonlyURLSearchParams object, is the source of truth.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [filterQuery]
+  );
+  const filtersActive = hasCompletedYearFilters(filters);
+
   const [entries, setEntries] = useState<CompletedGameEntry[]>([]);
   const [years, setYears] = useState<CompletedGamesYear[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [dashboard, setDashboard] = useState<CompletedGamesYearDashboard | null>(null);
+  const [entriesLoading, setEntriesLoading] = useState(true);
+  const [metadataLoading, setMetadataLoading] = useState(true);
+  const [entriesError, setEntriesError] = useState<string | null>(null);
+  const [metadataError, setMetadataError] = useState<string | null>(null);
+  const [comparisonYears, setComparisonYears] = useState<number[]>([]);
+  const [comparison, setComparison] = useState<CompletedGamesComparison | null>(null);
+  const [comparisonLoading, setComparisonLoading] = useState(false);
+  const [comparisonError, setComparisonError] = useState<string | null>(null);
+  const comparisonInitialized = useRef(false);
 
   useEffect(() => {
-    if (!Number.isInteger(year) || year < 1900 || year > 9998) {
-      setError("Nieprawidłowy rok.");
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    Promise.all([api.listCompletedGames(year), api.listCompletedYears()])
-      .then(([completedEntries, availableYears]) => { setEntries(completedEntries); setYears(availableYears); })
-      .catch((err) => setError(err instanceof Error ? err.message : "Nie udało się pobrać historii"))
-      .finally(() => setLoading(false));
-  }, [year]);
+    if (!validYear) return;
+
+    let active = true;
+    setEntriesLoading(true);
+    setEntriesError(null);
+    api
+      .listCompletedGames(year, {
+        platform: filters.platforms,
+        genre: filters.genres,
+        rating_min: filters.ratingMin,
+        rating_max: filters.ratingMax
+      })
+      .then((result) => {
+        if (active) setEntries(result);
+      })
+      .catch((err) => {
+        if (active) setEntriesError(err instanceof Error ? err.message : "Nie udało się pobrać ukończonych gier.");
+      })
+      .finally(() => {
+        if (active) setEntriesLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [filterQuery, filters.genres, filters.platforms, filters.ratingMax, filters.ratingMin, validYear, year]);
+
+  useEffect(() => {
+    if (!validYear) return;
+
+    let active = true;
+    setMetadataLoading(true);
+    setMetadataError(null);
+    setYears([]);
+    setDashboard(null);
+    setComparisonYears([]);
+    setComparison(null);
+    comparisonInitialized.current = false;
+
+    Promise.allSettled([api.listCompletedYears(), api.getCompletedYearDashboard(year)])
+      .then(([yearsResult, dashboardResult]) => {
+        if (!active) return;
+
+        const errors: string[] = [];
+        if (yearsResult.status === "fulfilled") {
+          setYears(yearsResult.value);
+        } else {
+          errors.push(getErrorMessage(yearsResult.reason, "Nie udało się pobrać listy innych lat."));
+        }
+
+        if (dashboardResult.status === "fulfilled") {
+          setDashboard(dashboardResult.value);
+        } else {
+          errors.push(getErrorMessage(dashboardResult.reason, "Nie udało się pobrać podsumowania roku."));
+        }
+
+        if (errors.length) setMetadataError(errors.join(" "));
+      })
+      .finally(() => {
+        if (active) setMetadataLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [validYear, year]);
 
   const monthGroups = useMemo(() => groupCompletedGamesByMonth(entries), [entries]);
-  const navigation = useMemo(() => getAvailableYearNavigation(year, years), [year, years]);
+  const navigation = useMemo(() => getYearNavigation(year, years), [year, years]);
+  const comparisonAvailableYears = useMemo(
+    () => getComparisonYears(year, years, dashboard?.completed_games_count ?? 0),
+    [dashboard?.completed_games_count, year, years]
+  );
+  const comparisonYearsKey = comparisonYears.join(",");
 
-  if (loading) return <LoadingState label={`Ładowanie ukończonych gier z ${year} roku`} />;
-  if (error) return <ErrorState message={error} />;
+  useEffect(() => {
+    if (comparisonInitialized.current || !comparisonAvailableYears.length) return;
+    comparisonInitialized.current = true;
+    setComparisonYears(comparisonAvailableYears.slice(0, 2).map((item) => item.year));
+  }, [comparisonAvailableYears]);
+
+  useEffect(() => {
+    if (comparisonYears.length < 2) {
+      setComparison(null);
+      setComparisonError(null);
+      return;
+    }
+
+    let active = true;
+    setComparisonLoading(true);
+    setComparisonError(null);
+    api
+      .compareCompletedYears(comparisonYears)
+      .then((result) => {
+        if (active) setComparison(result);
+      })
+      .catch((err) => {
+        if (active) setComparisonError(err instanceof Error ? err.message : "Nie udało się porównać wybranych lat.");
+      })
+      .finally(() => {
+        if (active) setComparisonLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [comparisonYears, comparisonYearsKey]);
+
+  if (!validYear) return <ErrorState message="Nieprawidłowy rok." />;
+  if (metadataLoading && entriesLoading && !dashboard) {
+    return <LoadingState label={`Ładowanie ukończonych gier z ${year} roku`} />;
+  }
+
+  function updateFilters(nextFilters: CompletedYearFilters) {
+    const query = completedYearFiltersToSearchParams(nextFilters).toString();
+    router.replace(`/completed-games/${year}${query ? `?${query}` : ""}`, { scroll: false });
+  }
+
+  function toggleFilterValue(kind: "platforms" | "genres", value: string) {
+    const values = filters[kind];
+    const nextValues = values.includes(value) ? values.filter((item) => item !== value) : [...values, value];
+    updateFilters({ ...filters, [kind]: nextValues });
+  }
+
+  function updateRating(bound: "ratingMin" | "ratingMax", rawValue: string) {
+    const parsed = rawValue === "" ? undefined : Number(rawValue);
+    const value = typeof parsed === "number" && Number.isFinite(parsed) && parsed >= 0 && parsed <= 10 ? parsed : undefined;
+    const nextFilters = { ...filters, [bound]: value };
+    if (nextFilters.ratingMin !== undefined && nextFilters.ratingMax !== undefined && nextFilters.ratingMin > nextFilters.ratingMax) {
+      if (bound === "ratingMin") nextFilters.ratingMax = undefined;
+      else nextFilters.ratingMin = undefined;
+    }
+    updateFilters(nextFilters);
+  }
+
+  function selectComparisonYears(nextYears: number[]) {
+    setComparisonYears(
+      Array.from(new Set(nextYears.filter((value) => Number.isInteger(value) && value >= 1900 && value <= 9998)))
+        .sort((left, right) => right - left)
+        .slice(0, 8)
+    );
+  }
 
   return (
     <div className="space-y-6">
       <header className="space-y-4">
-        <Link href="/completed-games" className="inline-flex min-h-11 items-center gap-2 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="h-4 w-4" aria-hidden="true" />Wszystkie lata</Link>
+        <Link href="/completed-games/years" className="inline-flex min-h-11 items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
+          <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Inne lata
+        </Link>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div><p className="text-sm font-semibold text-primary">Historia roczna</p><h1 className="mt-1 text-2xl font-bold sm:text-3xl">Ukończone gry — {year}</h1><p className="mt-2 text-sm text-muted-foreground">Łącznie ukończonych gier: {entries.length}</p></div>
+          <div>
+            <p className="text-sm font-semibold text-primary">Historia roczna</p>
+            <h1 className="mt-1 text-2xl font-bold sm:text-3xl">Ukończone gry — {year}</h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Łącznie ukończonych gier: {dashboard?.completed_games_count ?? 0}
+              {filtersActive ? ` · znaleziono po filtrach: ${entries.length}` : ""}
+            </p>
+          </div>
           <Link href="/completed-games/new"><Button><Plus className="h-4 w-4" aria-hidden="true" />Dodaj grę</Button></Link>
         </div>
       </header>
 
       <Card>
         <CardContent className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between sm:p-4">
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {navigation.olderYear ? <Link href={`/completed-games/${navigation.olderYear}`}><Button variant="secondary"><ChevronLeft className="h-4 w-4" aria-hidden="true" />Poprzedni rok ({navigation.olderYear})</Button></Link> : null}
             {navigation.newerYear ? <Link href={`/completed-games/${navigation.newerYear}`}><Button variant="secondary">Następny rok ({navigation.newerYear})<ChevronRight className="h-4 w-4" aria-hidden="true" /></Button></Link> : null}
           </div>
-          <Select className="sm:w-52" value={years.some((item) => item.year === year) ? String(year) : ""} onChange={(event) => event.target.value && router.push(`/completed-games/${event.target.value}`)} aria-label="Wybierz inny rok">
-            {!years.some((item) => item.year === year) ? <option value="">Wybierz rok</option> : null}
-            {years.map((item) => <option key={item.year} value={item.year}>{item.year} ({item.completed_games_count})</option>)}
-          </Select>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <Link href="/completed-games/years"><Button variant="ghost">Inne lata</Button></Link>
+            <Select className="sm:w-52" value={String(year)} onChange={(event) => event.target.value && router.push(`/completed-games/${event.target.value}`)} aria-label="Wybierz inny rok">
+              {!years.some((item) => item.year === year) ? <option value={year}>{year} (brak wpisów)</option> : null}
+              {years.map((item) => <option key={item.year} value={item.year}>{item.year} ({item.completed_games_count})</option>)}
+            </Select>
+          </div>
         </CardContent>
       </Card>
 
-      {!entries.length ? <EmptyState title={`Brak ukończonych gier w ${year} roku`} description="Wybierz inny rok albo dodaj wpis z datą ukończenia w tym roku." /> : null}
-      {monthGroups.map((group) => (
+      {metadataError ? <ErrorState message={metadataError} /> : null}
+      {dashboard ? <CompletedYearDashboard dashboard={dashboard} /> : null}
+
+      <Card>
+        <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3 space-y-0">
+          <div>
+            <CardTitle className="flex items-center gap-2"><Filter className="h-5 w-5 text-primary" aria-hidden="true" />Filtry wpisów</CardTitle>
+            <CardDescription>Filtry dotyczą wyłącznie wybranego roku i są zapisane w adresie URL.</CardDescription>
+          </div>
+          <Button type="button" variant="secondary" disabled={!filtersActive} onClick={() => updateFilters(emptyFilters)}>
+            <X className="h-4 w-4" aria-hidden="true" /> Wyczyść filtry
+          </Button>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <div className="grid gap-5 lg:grid-cols-2">
+            <CheckboxFilterGroup
+              legend="Platformy"
+              values={dashboard?.filter_options.platforms ?? []}
+              selected={filters.platforms}
+              onToggle={(value) => toggleFilterValue("platforms", value)}
+              emptyLabel="Brak platform w tym roku."
+            />
+            <CheckboxFilterGroup
+              legend="Gatunki"
+              values={dashboard?.filter_options.genres ?? []}
+              selected={filters.genres}
+              onToggle={(value) => toggleFilterValue("genres", value)}
+              emptyLabel="Brak gatunków w tym roku."
+            />
+          </div>
+          <fieldset>
+            <legend className="text-sm font-semibold">Ocena</legend>
+            <div className="mt-2 grid gap-3 sm:grid-cols-2">
+              <label className="space-y-1.5 text-sm text-muted-foreground">
+                <span>Od</span>
+                <Input type="number" min={0} max={10} step={0.5} value={filters.ratingMin ?? ""} onChange={(event) => updateRating("ratingMin", event.target.value)} placeholder="np. 8" />
+              </label>
+              <label className="space-y-1.5 text-sm text-muted-foreground">
+                <span>Do</span>
+                <Input type="number" min={0} max={10} step={0.5} value={filters.ratingMax ?? ""} onChange={(event) => updateRating("ratingMax", event.target.value)} placeholder="np. 10" />
+              </label>
+            </div>
+          </fieldset>
+        </CardContent>
+      </Card>
+
+      {entriesError ? <ErrorState message={entriesError} /> : null}
+      {entriesLoading ? <LoadingState label="Aktualizowanie listy gier" /> : null}
+      {!entriesLoading && !entriesError && !entries.length ? (
+        <EmptyState
+          title={filtersActive ? "Brak gier spełniających wybrane filtry" : `Brak ukończonych gier w ${year} roku`}
+          description={filtersActive ? "Wyczyść filtry albo wybierz inne kryteria." : "Dodaj pierwszy wpis z datą ukończenia w tym roku."}
+        />
+      ) : null}
+      {!entriesLoading && !entriesError ? monthGroups.map((group) => (
         <section key={group.month} className="space-y-3" aria-labelledby={`month-${group.month}`}>
           <div className="flex items-baseline justify-between border-b border-border pb-2"><h2 id={`month-${group.month}`} className="text-xl font-bold">{group.label}</h2><span className="text-sm text-muted-foreground">{group.entries.length} gier</span></div>
           <div className="space-y-3">{group.entries.map((entry) => <CompletedGameCard key={entry.id} entry={entry} />)}</div>
         </section>
-      ))}
+      )) : null}
+
+      <section aria-labelledby="year-comparison-heading">
+        <h2 id="year-comparison-heading" className="sr-only">Porównanie lat</h2>
+        <CompletedYearsComparison
+          availableYears={comparisonAvailableYears}
+          selectedYears={comparisonYears}
+          comparison={comparison}
+          loading={comparisonLoading}
+          onSelectedYearsChange={selectComparisonYears}
+        />
+        {comparisonError ? <div className="mt-3"><ErrorState message={comparisonError} /></div> : null}
+      </section>
     </div>
   );
+}
+
+function CheckboxFilterGroup({
+  legend,
+  values,
+  selected,
+  onToggle,
+  emptyLabel
+}: {
+  legend: string;
+  values: string[];
+  selected: string[];
+  onToggle: (value: string) => void;
+  emptyLabel: string;
+}) {
+  return (
+    <fieldset>
+      <legend className="text-sm font-semibold">{legend}</legend>
+      {values.length ? (
+        <div className="mt-2 grid max-h-52 gap-2 overflow-y-auto rounded-md border border-border bg-background/35 p-3 sm:grid-cols-2">
+          {values.map((value) => (
+            <label key={value} className="flex min-h-9 items-center gap-2 rounded px-1 text-sm hover:bg-muted">
+              <input type="checkbox" checked={selected.includes(value)} onChange={() => onToggle(value)} className="h-4 w-4 accent-primary" />
+              <span className="min-w-0 truncate">{value}</span>
+            </label>
+          ))}
+        </div>
+      ) : <p className="mt-2 text-sm text-muted-foreground">{emptyLabel}</p>}
+    </fieldset>
+  );
+}
+
+function getYearNavigation(year: number, years: CompletedGamesYear[]) {
+  if (years.some((item) => item.year === year)) {
+    return getAvailableYearNavigation(year, years);
+  }
+
+  const ordered = [...years].map((item) => item.year).sort((left, right) => right - left);
+  return {
+    newerYear: ordered.find((item) => item > year) ?? null,
+    olderYear: ordered.find((item) => item < year) ?? null
+  };
+}
+
+function getComparisonYears(year: number, years: CompletedGamesYear[], completedGamesCount: number) {
+  const current = years.find((item) => item.year === year);
+  const candidates = current ? years : [{ year, completed_games_count: completedGamesCount }, ...years];
+  return [...candidates].sort((left, right) => right.year - left.year);
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
 }

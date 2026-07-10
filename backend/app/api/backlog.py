@@ -1,12 +1,26 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import desc, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from app.database.session import get_session
 from app.models import BacklogEntry, Game
-from app.schemas.games import BacklogEntryCreate, BacklogEntryRead, BacklogEntryUpdate, BacklogReorder
-from app.services.backlog_service import reorder_backlog
+from app.schemas.games import (
+    BacklogBatchCreate,
+    BacklogBatchItemResult,
+    BacklogBatchRead,
+    BacklogEntryCreate,
+    BacklogEntryRead,
+    BacklogEntryUpdate,
+    BacklogReorder,
+)
+from app.services.backlog_service import (
+    BacklogBatchConflictError,
+    add_games_to_backlog,
+    get_backlog_identity_index,
+    is_game_on_backlog,
+    reorder_backlog,
+)
 
 router = APIRouter()
 
@@ -29,8 +43,16 @@ def list_backlog(
 
 @router.post("", response_model=BacklogEntryRead, status_code=201)
 def create_backlog_entry(payload: BacklogEntryCreate, db: Session = Depends(get_session)) -> BacklogEntry:
-    if not db.get(Game, payload.game_id):
+    game = db.get(Game, payload.game_id)
+    if not game:
         raise HTTPException(status_code=404, detail="Game not found")
+    if is_game_on_backlog(
+        game.title,
+        game.external_source,
+        game.external_id,
+        get_backlog_identity_index(db),
+    ):
+        raise HTTPException(status_code=409, detail="Game is already on the backlog")
 
     data = payload.model_dump()
     if data["position"] == 0:
@@ -44,6 +66,45 @@ def create_backlog_entry(payload: BacklogEntryCreate, db: Session = Depends(get_
         db.rollback()
         raise HTTPException(status_code=409, detail="Game is already on the backlog") from exc
     return _get_entry(db, entry.id)
+
+
+@router.post("/batch", response_model=BacklogBatchRead, status_code=201)
+def create_backlog_batch(
+    payload: BacklogBatchCreate,
+    response: Response,
+    db: Session = Depends(get_session),
+) -> BacklogBatchRead:
+    """Append RAWG search selections in one all-or-nothing database operation."""
+
+    try:
+        operations = add_games_to_backlog(db, payload.games)
+    except BacklogBatchConflictError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "BACKLOG_BATCH_CONFLICT",
+                "message": "Lista Do ogrania została zmieniona. Odśwież wyniki i spróbuj ponownie.",
+            },
+        ) from exc
+
+    added = [operation.entry for operation in operations if operation.status == "added"]
+    already_exists = [
+        BacklogBatchItemResult(
+            title=operation.title,
+            external_id=operation.external_id,
+            external_source=operation.external_source,
+            status="already_exists",
+            reason=operation.reason,
+            entry=operation.entry,
+        )
+        for operation in operations
+        if operation.status == "already_exists"
+    ]
+    # The operation is atomic, therefore a successful response has no partial
+    # failures.  A database conflict is returned as 409 after a rollback.
+    if not added:
+        response.status_code = 200
+    return BacklogBatchRead(added=added, already_exists=already_exists, failed=[])
 
 
 @router.post("/reorder", response_model=list[BacklogEntryRead])

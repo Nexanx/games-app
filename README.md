@@ -57,7 +57,7 @@ FRONTEND_URL=http://localhost:3000
 NEXT_PUBLIC_API_URL=http://localhost:8000/api
 ```
 
-`RAWG_API_KEY` jest wymagany do wyszukiwania gier. `OPENAI_API_KEY` i `OPENAI_MODEL` są wymagane do odpowiedzi chatbota. Jeśli konfiguracji brakuje albo zewnętrzne API zwróci błąd, backend zwróci jawny kod błędu 503/502 zamiast używać mocków. Frontend sprawdza `GET /api/chat/status` i wyświetla czytelny komunikat, gdy chatbot nie jest gotowy.
+`RAWG_API_KEY` jest wymagany do wyszukiwania gier. `OPENAI_API_KEY` i `OPENAI_MODEL` są wymagane do odpowiedzi chatbota. Brak konfiguracji RAWG albo błąd dostawcy zwraca jawny kod 503/502 zamiast używać mocków. Frontend sprawdza `GET /api/chat/status` i wyświetla czytelny komunikat, gdy chatbot nie jest gotowy.
 
 Przy ręcznym dodawaniu gry możesz wpisać sam tytuł. Jeśli `cover_url` jest puste, backend spróbuje pobrać okładkę i brakujące metadane z RAWG. Gdy RAWG nie jest skonfigurowany albo nie zwróci okładki, API zwróci jawny błąd zamiast zapisać rekord z danymi zastępczymi.
 
@@ -72,6 +72,14 @@ OPENAI_API_KEY=twoj_klucz_gemini
 OPENAI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
 OPENAI_MODEL=gemini-3.5-flash
 ```
+
+Limit oczekiwania na odpowiedź modelu ustawisz bez zapisywania go w kodzie:
+
+```env
+LLM_REQUEST_TIMEOUT_SECONDS=30
+```
+
+Wartość musi być dodatnia (maksymalnie `120` sekund). `POST /api/chat` zwraca bezpieczne szczegóły błędu w polu `detail`: kod, komunikat dla użytkownika i `error_id`, który można odnaleźć w logach backendu. Obsługiwane kody to `llm_not_configured`, `llm_auth_error`, `llm_timeout`, `llm_rate_limited`, `llm_provider_unavailable`, `llm_network_error`, `llm_invalid_response` oraz `llm_internal_error`. Odpowiedzi i logi nie zawierają kluczy API, nagłówków uwierzytelniających ani surowych odpowiedzi dostawcy.
 
 ## Uruchomienie
 
@@ -121,6 +129,16 @@ Aplikacja:
 - Backend: http://localhost:8000
 - OpenAPI: http://localhost:8000/docs
 
+## Migracje
+
+Skrypt `start_app.ps1` wykonuje `alembic upgrade head` przed uruchomieniem serwerów. Przy ręcznym starcie wykonaj tę samą komendę z katalogu `backend` po uruchomieniu PostgreSQL:
+
+```powershell
+.\.venv\Scripts\alembic upgrade head
+```
+
+Aktualna migracja dodaje indeks znormalizowanej pary źródło/identyfikator zewnętrzny gry, wykorzystywany przez deduplikację RAWG. Migracje nie usuwają istniejących wpisów użytkownika.
+
 ## Komendy Makefile
 
 ```powershell
@@ -132,6 +150,31 @@ make backend-clear-sample-data
 make backend-dev
 make frontend-install
 make frontend-dev
+```
+
+## Kopia danych JSON
+
+Na pulpicie głównym znajduje się karta **Kopia zapasowa**. Przycisk **Pobierz kopię JSON** zapisuje pojedynczy plik w formacie `format_version: 1`, zawierający lokalne gry, listę „Do ogrania”, ukończone wpisy i własne statystyki, dane Path of Exile oraz historię rozmów. Eksport nie obejmuje kluczy API, tokenów, sekretów ani wartości z plików `.env`.
+
+Przywracanie działa wyłącznie w trybie `replace`:
+
+1. wybierz wcześniej wyeksportowany plik JSON;
+2. potwierdź ostrzeżenie o zastąpieniu danych;
+3. aplikacja sprawdzi wersję formatu, wymagane pola i relacje między rekordami;
+4. dopiero wtedy zastąpi dane w jednej transakcji i odświeży widok.
+
+Nie ma trybu łączenia danych. Uszkodzony albo nieobsługiwany plik nie zmienia bazy; błąd importu także wycofuje całą operację. Dla automatyzacji dostępne są `GET /api/backup/export` oraz `POST /api/backup/import` z treścią:
+
+```json
+{
+  "mode": "replace",
+  "backup": {
+    "format_version": 1,
+    "exported_at": "2026-07-10T20:00:00Z",
+    "app_name": "Games Tracker",
+    "data": {}
+  }
+}
 ```
 
 ## Tryb produkcyjny
@@ -227,26 +270,30 @@ cd backend
 
 ## Najważniejsze endpointy
 
+### Gry RAWG i lista „Do ogrania”
+
+- `GET /api/games/search?query=Hades&page=1&page_size=10` zwraca `{ results, page, page_size, has_next }`. Wyniki aktywnego backlogu są odfiltrowane po parze `external_source` + `external_id`; dla ręcznych gier bez identyfikatora używany jest znormalizowany tytuł. Paginacja pozostaje logiczna po filtrowaniu, dlatego klient korzysta z `has_next`.
+- `GET/POST /api/games`, `GET/PATCH/DELETE /api/games/{id}`.
+- `GET /api/backlog`, `POST /api/backlog`, `PATCH/DELETE /api/backlog/{id}` oraz `POST /api/backlog/reorder`.
+- `POST /api/backlog/batch` przyjmuje `{ "games": [/* wyniki RAWG */] }` i atomowo dodaje maksymalnie 50 zaznaczonych pozycji. Odpowiedź ma pola `added`, `already_exists` i `failed`; duplikaty są raportowane w `already_exists`, a konflikt zapisu wycofuje całą grupę.
+
+### Ukończone gry i podsumowania
+
+- `GET /api/completed-games/years` zwraca dostępne lata oraz liczbę wpisów.
+- `GET /api/completed-games?year=2026` pobiera tylko wskazany rok. Opcjonalne parametry: `month`, wielokrotne `platform` i `genre`, a także `rating_min` oraz `rating_max`; przykładowo `?year=2026&platform=PC&genre=RPG&rating_min=8`.
+- `GET /api/completed-games/year/2026/dashboard` zwraca roczne agregaty: liczbę gier, czas, oceny, najdłuższą/najlepiej ocenioną grę oraz podsumowanie miesięczne i dostępne opcje filtrów.
+- `GET /api/completed-games/comparison?years=2025,2026` zwraca porównanie od 2 do 8 różnych lat, również w podziale na miesiące.
+- `GET/POST /api/completed-games`, `GET/PATCH/DELETE /api/completed-games/{id}`.
+- `GET/POST /api/completed-games/{id}/statistics` oraz `PATCH/DELETE /api/completed-games/statistics/{id}`.
+
+### Kopie, dashboard, PoE i chatbot
+
 - `GET /api/dashboard/summary`
-- `GET /api/games/search?query=`
-- `GET /api/games`, `POST /api/games`, `GET/PATCH/DELETE /api/games/{id}`
-- `GET /api/backlog`, `POST /api/backlog`, `PATCH/DELETE /api/backlog/{id}`
-- `POST /api/backlog/reorder`
-- `GET /api/completed-games/years`
-- `GET /api/completed-games?year=2026`
-- `GET/POST /api/completed-games`, `GET/PATCH/DELETE /api/completed-games/{id}`
-- `GET/POST /api/completed-games/{id}/statistics`
-- `PATCH/DELETE /api/completed-games/statistics/{id}`
-- `GET/POST/PATCH/DELETE /api/poe/leagues`
-- `POST /api/poe/leagues/sync`
-- `GET/POST/PATCH/DELETE /api/poe/characters`
-- `POST /api/poe/import-from-ninja`
-- `GET/POST /api/poe/characters/{id}/stats`
-- `PATCH/DELETE /api/poe/stats/{id}`
-- `POST /api/poe/characters/{id}/stats/reorder`
-- `POST /api/chat`
-- `GET /api/chat/status`
-- `GET /api/chat/sessions`
+- `GET /api/backup/export`, `POST /api/backup/import`
+- `GET/POST/PATCH/DELETE /api/poe/leagues`, `POST /api/poe/leagues/sync`
+- `GET/POST/PATCH/DELETE /api/poe/characters`, `POST /api/poe/import-from-ninja`
+- `GET/POST /api/poe/characters/{id}/stats`, `PATCH/DELETE /api/poe/stats/{id}`, `POST /api/poe/characters/{id}/stats/reorder`
+- `POST /api/chat`, `GET /api/chat/status`, `GET /api/chat/sessions`
 
 ## Testy
 

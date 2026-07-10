@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  completedYearFiltersFromSearchParams,
+  completedYearFiltersToSearchParams,
+  currentCompletedGamesYear,
   getAvailableYearNavigation,
   groupCompletedGamesByMonth,
+  hasCompletedYearFilters,
   todayAsInputValue
 } from "../lib/completed-games";
 import type { CompletedGameEntry } from "../types";
@@ -52,5 +56,19 @@ describe("completed games grouping", () => {
 
   it("uses the local calendar date as the default form value", () => {
     expect(todayAsInputValue(new Date(2026, 6, 10, 23, 30))).toBe("2026-07-10");
+    expect(currentCompletedGamesYear(new Date(2026, 0, 1))).toBe(2026);
+  });
+
+  it("keeps combined filters in the URL and can clear their state", () => {
+    const filters = completedYearFiltersFromSearchParams(
+      new URLSearchParams("platform=PC&platform=PS5&genre=RPG&rating_min=8&rating_max=9")
+    );
+
+    expect(filters).toEqual({ platforms: ["PC", "PS5"], genres: ["RPG"], ratingMin: 8, ratingMax: 9 });
+    expect(hasCompletedYearFilters(filters)).toBe(true);
+    expect(completedYearFiltersToSearchParams(filters).toString()).toBe(
+      "platform=PC&platform=PS5&genre=RPG&rating_min=8&rating_max=9"
+    );
+    expect(hasCompletedYearFilters({ platforms: [], genres: [] })).toBe(false);
   });
 });

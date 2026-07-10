@@ -20,6 +20,7 @@ export default function BacklogPage() {
   const [sort, setSort] = useState("position");
   const [search, setSearch] = useState("");
   const [openPanel, setOpenPanel] = useState<"search" | "manual" | null>(null);
+  const [searchBacklogEntries, setSearchBacklogEntries] = useState<BacklogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -45,9 +46,36 @@ export default function BacklogPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sort]);
 
-  function afterGameAdded() {
+  async function refreshSearchBacklog() {
+    try {
+      setSearchBacklogEntries(await api.listBacklog());
+    } catch {
+      // The server remains the final duplicate guard. Keep the currently
+      // displayed entries as a local fallback if this secondary request fails.
+      setSearchBacklogEntries(entries);
+    }
+  }
+
+  function toggleSearchPanel() {
+    if (openPanel === "search") {
+      setOpenPanel(null);
+      return;
+    }
+
+    setOpenPanel("search");
+    setSearchBacklogEntries(entries);
+    void refreshSearchBacklog();
+  }
+
+  function afterManualGameAdded() {
     setOpenPanel(null);
     void load();
+    void refreshSearchBacklog();
+  }
+
+  function afterSearchGamesAdded() {
+    void load();
+    void refreshSearchBacklog();
   }
 
   return (
@@ -65,7 +93,7 @@ export default function BacklogPage() {
           <Button
             variant={openPanel === "search" ? "primary" : "secondary"}
             className="min-h-12 justify-start"
-            onClick={() => setOpenPanel(openPanel === "search" ? null : "search")}
+            onClick={toggleSearchPanel}
           >
             <Search className="h-4 w-4" aria-hidden="true" />
             Wyszukaj w RAWG
@@ -79,8 +107,8 @@ export default function BacklogPage() {
             Dodaj ręcznie
           </Button>
         </div>
-        {openPanel === "search" ? <GameSearch onAdded={afterGameAdded} /> : null}
-        {openPanel === "manual" ? <GameForm onAdded={afterGameAdded} /> : null}
+        {openPanel === "search" ? <GameSearch existingEntries={searchBacklogEntries} onAdded={afterSearchGamesAdded} /> : null}
+        {openPanel === "manual" ? <GameForm onAdded={afterManualGameAdded} /> : null}
       </section>
 
       <Card>
@@ -110,7 +138,14 @@ export default function BacklogPage() {
       {loading ? <LoadingState label="Ładowanie listy Do ogrania" /> : null}
       {error ? <ErrorState message={error} /> : null}
       {!loading && !error ? (
-        <BacklogList entries={entries} sortable={sort === "position" && !search} onChanged={(next) => void load(next)} />
+        <BacklogList
+          entries={entries}
+          sortable={sort === "position" && !search}
+          onChanged={(next) => {
+            void load(next);
+            void refreshSearchBacklog();
+          }}
+        />
       ) : null}
     </div>
   );

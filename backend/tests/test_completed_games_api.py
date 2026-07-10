@@ -146,3 +146,106 @@ def test_year_and_month_validation_and_empty_year(client):
     response = client.get("/api/completed-games", params={"year": 2026})
     assert response.status_code == 200
     assert response.json() == []
+
+
+def test_year_dashboard_returns_aggregates_months_and_filter_options(client, db_session):
+    rpg = add_game(db_session, "RPG Game", platforms=["PC"])
+    action = add_game(db_session, "Action Game", platforms=["PlayStation 5"])
+    db_session.add_all(
+        [
+            CompletedGameEntry(
+                game_id=rpg.id,
+                completion_date=date(2026, 7, 20),
+                playtime_hours=20,
+                rating=9,
+                platform="PC",
+            ),
+            CompletedGameEntry(
+                game_id=action.id,
+                completion_date=date(2026, 6, 5),
+                playtime_hours=40,
+                rating=7,
+                platform="PlayStation 5",
+            ),
+        ]
+    )
+    db_session.commit()
+
+    response = client.get("/api/completed-games/year/2026/dashboard")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["completed_games_count"] == 2
+    assert payload["total_playtime_hours"] == 60
+    assert payload["average_playtime_hours"] == 30
+    assert payload["average_rating"] == 8
+    assert payload["best_rated_game"]["title"] == "RPG Game"
+    assert payload["longest_game"]["title"] == "Action Game"
+    assert payload["active_months_count"] == 2
+    assert [item["month"] for item in payload["monthly"]] == [7, 6]
+    assert payload["filter_options"]["platforms"] == ["PC", "PlayStation 5"]
+    assert payload["filter_options"]["genres"] == ["RPG"]
+
+
+def test_completed_games_filters_can_be_combined_and_comparison_keeps_empty_months(client, db_session):
+    pc_rpg = add_game(db_session, "PC RPG", platforms=["PC"])
+    console_rpg = add_game(db_session, "Console RPG", platforms=["PlayStation 5"])
+    older = add_game(db_session, "Older RPG", platforms=["PC"])
+    db_session.add_all(
+        [
+            CompletedGameEntry(
+                game_id=pc_rpg.id,
+                completion_date=date(2026, 5, 20),
+                playtime_hours=10,
+                rating=9,
+                platform="PC",
+            ),
+            CompletedGameEntry(
+                game_id=console_rpg.id,
+                completion_date=date(2026, 4, 20),
+                playtime_hours=8,
+                rating=6,
+                platform="PlayStation 5",
+            ),
+            CompletedGameEntry(
+                game_id=older.id,
+                completion_date=date(2025, 1, 1),
+                playtime_hours=12,
+                rating=8,
+                platform="PC",
+            ),
+        ]
+    )
+    db_session.commit()
+
+    filtered = client.get(
+        "/api/completed-games",
+        params=[("year", "2026"), ("platform", "pc"), ("genre", "rpg"), ("rating_min", "8")],
+    )
+    comparison = client.get("/api/completed-games/comparison", params={"years": "2025,2026"})
+
+    assert filtered.status_code == 200
+    assert [item["game"]["title"] for item in filtered.json()] == ["PC RPG"]
+    assert comparison.status_code == 200
+    years = comparison.json()["years"]
+    assert [item["year"] for item in years] == [2026, 2025]
+    assert len(years[0]["monthly"]) == 12
+    assert years[0]["monthly"][4]["completed_games_count"] == 1
+
+
+def test_empty_year_dashboard_uses_clear_empty_values(client):
+    response = client.get("/api/completed-games/year/2026/dashboard")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "year": 2026,
+        "completed_games_count": 0,
+        "total_playtime_hours": 0.0,
+        "average_playtime_hours": None,
+        "average_rating": None,
+        "best_rated_game": None,
+        "longest_game": None,
+        "active_months_count": 0,
+        "monthly": [],
+        "filter_options": {"platforms": [], "genres": []},
+    }

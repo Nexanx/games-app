@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Pencil, Trash2 } from "lucide-react";
 
+import { GameCover } from "@/components/games/GameCover";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -29,7 +30,7 @@ export default function CompletedGameDetailsPage() {
     <div className="space-y-5">
       <Link href={`/completed-games/${year}`} className="inline-flex min-h-11 items-center gap-2 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="h-4 w-4" aria-hidden="true" />Wróć do {year} roku</Link>
       <section className="grid gap-5 lg:grid-cols-[300px_1fr]">
-        <div className="aspect-[3/4] overflow-hidden rounded-lg border border-border bg-muted">{entry.game.cover_url ? <img src={entry.game.cover_url} alt={entry.game.title} className="h-full w-full object-cover" /> : null}</div>
+        <GameCover src={entry.game.cover_url} title={entry.game.title} variant="detail" className="rounded-lg" />
         <div className="space-y-4">
           <header><h1 className="text-2xl font-bold sm:text-3xl">{entry.game.title}</h1><p className="mt-2 text-sm text-muted-foreground">Ukończono {asDate(entry.completion_date)}</p></header>
           <Card><CardContent className="grid gap-3 p-4 sm:grid-cols-3"><Metric label="Czas gry" value={formatHours(entry.playtime_hours)} /><Metric label="Ocena" value={entry.rating == null ? "Bez oceny" : `${entry.rating}/10`} /><Metric label="Platforma" value={entry.platform || "Brak"} /></CardContent></Card>
