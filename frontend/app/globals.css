@@ -22,6 +22,28 @@ body {
     radial-gradient(circle at top left, rgba(24, 146, 116, 0.13), transparent 34rem),
     linear-gradient(135deg, #080d16 0%, #101722 52%, #0a0f18 100%);
   color: hsl(210 30% 96%);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: hsl(159 72% 44% / 0.28);
+}
+
+:focus-visible {
+  outline: 2px solid hsl(42 75% 55%);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 button,
@@ -46,4 +68,3 @@ select {
   height: 1px;
   background: linear-gradient(90deg, transparent, rgba(233, 185, 95, 0.8), transparent);
 }
-

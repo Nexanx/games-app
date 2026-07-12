@@ -25,10 +25,25 @@ def build_dashboard_summary(session: Session) -> DashboardSummary:
     completed_count = session.scalar(select(func.count(CompletedGameEntry.id))) or 0
     total_game_playtime_hours = session.scalar(select(func.sum(CompletedGameEntry.playtime_hours))) or 0
 
-    characters = session.scalars(select(PoeCharacter).options(selectinload(PoeCharacter.league))).all()
     poe_playtime = {"poe1": 0, "poe2": 0}
-    for character in characters:
-        poe_playtime[character.game_version] = poe_playtime.get(character.game_version, 0) + character.playtime_minutes
+    playtime_rows = session.execute(
+        select(
+            PoeCharacter.game_version,
+            func.count(PoeCharacter.id).label("character_count"),
+            func.coalesce(func.sum(PoeCharacter.playtime_minutes), 0).label("playtime_minutes"),
+        ).group_by(PoeCharacter.game_version)
+    ).all()
+    character_count = 0
+    for row in playtime_rows:
+        character_count += int(row.character_count)
+        poe_playtime[row.game_version] = int(row.playtime_minutes)
+
+    recent_characters = session.scalars(
+        select(PoeCharacter)
+        .options(selectinload(PoeCharacter.league))
+        .order_by(desc(PoeCharacter.created_at))
+        .limit(5)
+    ).all()
 
     top_currency_rows = session.execute(
         select(
@@ -45,13 +60,18 @@ def build_dashboard_summary(session: Session) -> DashboardSummary:
     latest_league = session.scalars(select(PoeLeague).order_by(desc(PoeLeague.start_date), desc(PoeLeague.created_at))).first()
     league_summary = LeagueSummary()
     if latest_league:
-        league_characters = [character for character in characters if character.league_id == latest_league.id]
+        league_stats = session.execute(
+            select(
+                func.count(PoeCharacter.id).label("character_count"),
+                func.coalesce(func.sum(PoeCharacter.playtime_minutes), 0).label("playtime_minutes"),
+            ).where(PoeCharacter.league_id == latest_league.id)
+        ).one()
         league_summary = LeagueSummary(
             name=latest_league.name,
             game_version=latest_league.game_version,
             status=latest_league.status,
-            characters=len(league_characters),
-            playtime_minutes=sum(character.playtime_minutes for character in league_characters),
+            characters=int(league_stats.character_count),
+            playtime_minutes=int(league_stats.playtime_minutes),
         )
 
     return DashboardSummary(
@@ -59,8 +79,8 @@ def build_dashboard_summary(session: Session) -> DashboardSummary:
         total_game_playtime_hours=float(total_game_playtime_hours),
         recent_backlog_entries=recent_backlog_entries,
         recent_completed_games=recent_completed,
-        poe_character_count=len(characters),
-        recent_poe_characters=sorted(characters, key=lambda item: item.created_at, reverse=True)[:5],
+        poe_character_count=character_count,
+        recent_poe_characters=recent_characters,
         poe_playtime_by_version=poe_playtime,
         top_currency_drops=[
             CurrencyHighlight(

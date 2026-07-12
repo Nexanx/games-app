@@ -54,6 +54,7 @@ class Game(Base, TimestampMixin):
 
 class BacklogEntry(Base, TimestampMixin):
     __tablename__ = "backlog_entries"
+    __table_args__ = (Index("ix_backlog_entries_position_created", "position", "created_at"),)
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     game_id: Mapped[int] = mapped_column(ForeignKey("games.id", ondelete="CASCADE"), unique=True, nullable=False)
@@ -171,6 +172,7 @@ class ChatSession(Base, TimestampMixin):
 
 class ChatMessage(Base):
     __tablename__ = "chat_messages"
+    __table_args__ = (Index("ix_chat_messages_session_created", "session_id", "created_at", "id"),)
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     session_id: Mapped[int] = mapped_column(ForeignKey("chat_sessions.id", ondelete="CASCADE"), nullable=False)

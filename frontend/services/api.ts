@@ -24,6 +24,7 @@ import type {
 } from "@/types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api";
+const DEFAULT_TIMEOUT_MS = 15_000;
 
 type QueryScalar = string | number | boolean;
 type QueryValue = QueryScalar | QueryScalar[] | null | undefined;
@@ -43,7 +44,26 @@ function qs(params: Record<string, QueryValue>) {
   return value ? `?${value}` : "";
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+type RequestOptions = RequestInit & { timeoutMs?: number };
+
+function validationMessage(detail: unknown): string | null {
+  if (!Array.isArray(detail)) return null;
+  const messages = detail.flatMap((issue) => {
+    if (!issue || typeof issue !== "object") return [];
+    const record = issue as { loc?: unknown; msg?: unknown };
+    if (typeof record.msg !== "string") return [];
+    const field = Array.isArray(record.loc) ? record.loc.at(-1) : null;
+    return [typeof field === "string" ? `${field}: ${record.msg}` : record.msg];
+  });
+  return messages.length ? `Sprawdź poprawność danych: ${messages.join("; ")}` : null;
+}
+
+async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  const { timeoutMs = DEFAULT_TIMEOUT_MS, signal: externalSignal, ...init } = options;
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort("timeout"), timeoutMs);
+  const abortFromCaller = () => controller.abort(externalSignal?.reason);
+  externalSignal?.addEventListener("abort", abortFromCaller, { once: true });
   let response: Response;
   try {
     response = await fetch(`${API_URL}${path}`, {
@@ -52,10 +72,18 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
         "Content-Type": "application/json",
         ...(init?.headers ?? {})
       },
-      cache: "no-store"
+      cache: "no-store",
+      signal: controller.signal
     });
-  } catch {
+  } catch (error) {
+    if (controller.signal.aborted) {
+      if (externalSignal?.aborted) throw new DOMException("Żądanie anulowane", "AbortError");
+      throw new Error("Serwer nie odpowiedział w wymaganym czasie. Spróbuj ponownie.");
+    }
     throw new Error(`Nie udało się połączyć z API (${API_URL}). Sprawdź, czy backend działa i czy adres API jest poprawny.`);
+  } finally {
+    window.clearTimeout(timeoutId);
+    externalSignal?.removeEventListener("abort", abortFromCaller);
   }
 
   if (!response.ok) {
@@ -92,6 +120,10 @@ async function readApiError(response: Response): Promise<ApiError> {
   try {
     const payload = JSON.parse(text);
     const detail = payload?.detail;
+    const readableValidation = validationMessage(detail);
+    if (readableValidation) {
+      return new ApiError(readableValidation, { code: "VALIDATION_ERROR", status: response.status });
+    }
     if (typeof detail === "string") {
       return new ApiError(detail, { status: response.status });
     }
@@ -101,21 +133,21 @@ async function readApiError(response: Response): Promise<ApiError> {
     if (detail?.code) {
       return new ApiError(defaultMessage, { code: detail.code, errorId: detail.error_id, status: response.status });
     }
-    return new ApiError(JSON.stringify(payload) || defaultMessage, { status: response.status });
+    return new ApiError("Serwer nie mógł przetworzyć żądania.", { status: response.status });
   } catch {
-    return new ApiError(text || defaultMessage, { status: response.status });
+    return new ApiError(defaultMessage, { status: response.status });
   }
 }
 
 export const api = {
   dashboard: () => request<DashboardSummary>("/dashboard/summary"),
-  searchGames: (query: string, page = 1, pageSize = 10) =>
-    request<GameSearchPage>(`/games/search${qs({ query, page, page_size: pageSize })}`),
+  searchGames: (query: string, page = 1, pageSize = 10, signal?: AbortSignal) =>
+    request<GameSearchPage>(`/games/search${qs({ query, page, page_size: pageSize })}`, { signal }),
   createGame: (payload: Partial<Game>) =>
     request<Game>("/games", { method: "POST", body: JSON.stringify(payload) }),
   listGames: () => request<Game[]>("/games"),
-  listBacklog: (params: Record<string, QueryValue> = {}) =>
-    request<BacklogEntry[]>(`/backlog${qs(params)}`),
+  listBacklog: (params: Record<string, QueryValue> = {}, signal?: AbortSignal) =>
+    request<BacklogEntry[]>(`/backlog${qs(params)}`, { signal }),
   getBacklog: (id: number) => request<BacklogEntry>(`/backlog/${id}`),
   createBacklog: (payload: Partial<BacklogEntry> & { game_id: number }) =>
     request<BacklogEntry>("/backlog", { method: "POST", body: JSON.stringify(payload) }),
@@ -126,11 +158,11 @@ export const api = {
   deleteBacklog: (id: number) => request<void>(`/backlog/${id}`, { method: "DELETE" }),
   reorderBacklog: (ordered_ids: number[]) =>
     request<BacklogEntry[]>("/backlog/reorder", { method: "POST", body: JSON.stringify({ ordered_ids }) }),
-  listCompletedYears: () => request<CompletedGamesYear[]>("/completed-games/years"),
-  listCompletedGames: (year: number, filters: CompletedGamesFilters = {}) =>
-    request<CompletedGameEntry[]>(`/completed-games${qs({ year, ...filters })}`),
-  getCompletedYearDashboard: (year: number) =>
-    request<CompletedGamesYearDashboard>(`/completed-games/year/${year}/dashboard`),
+  listCompletedYears: (signal?: AbortSignal) => request<CompletedGamesYear[]>("/completed-games/years", { signal }),
+  listCompletedGames: (year: number, filters: CompletedGamesFilters = {}, signal?: AbortSignal) =>
+    request<CompletedGameEntry[]>(`/completed-games${qs({ year, ...filters })}`, { signal }),
+  getCompletedYearDashboard: (year: number, signal?: AbortSignal) =>
+    request<CompletedGamesYearDashboard>(`/completed-games/year/${year}/dashboard`, { signal }),
   compareCompletedYears: (years: number[]) =>
     request<CompletedGamesComparison>(`/completed-games/comparison${qs({ years: years.join(",") })}`),
   getCompletedGame: (id: number) => request<CompletedGameEntry>(`/completed-games/${id}`),

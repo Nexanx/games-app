@@ -20,7 +20,7 @@ import { api } from "@/services/api";
 import type { BacklogEntry, GameSearchPage, GameSearchResult } from "@/types";
 
 type BacklogApiContract = {
-  searchGames: (query: string, page?: number) => Promise<GameSearchResult[] | GameSearchPage>;
+  searchGames: (query: string, page?: number, pageSize?: number, signal?: AbortSignal) => Promise<GameSearchResult[] | GameSearchPage>;
   createBacklogBatch: (payload: { games: GameSearchResult[] }) => Promise<unknown>;
 };
 
@@ -95,6 +95,9 @@ export function GameSearch({
   const [feedback, setFeedback] = useState<{ message: string; warning: boolean } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const requestId = useRef(0);
+  const activeSearch = useRef<AbortController | null>(null);
+
+  useEffect(() => () => activeSearch.current?.abort(), []);
 
   useEffect(() => {
     setResults((current) => filterSearchResultsForBacklog(current, existingEntries));
@@ -102,33 +105,24 @@ export function GameSearch({
 
   async function loadPage(queryValue: string, requestedPage: number) {
     const currentRequestId = ++requestId.current;
+    activeSearch.current?.abort();
+    const controller = new AbortController();
+    activeSearch.current = controller;
     setLoading(true);
     setError(null);
 
     try {
-      let nextPage = requestedPage;
-      let response: GameSearchPage | null = null;
-      let visibleResults: GameSearchResult[] = [];
+      const payload = await backlogApi.searchGames(queryValue, requestedPage, 10, controller.signal);
+      const response = normalizeSearchResponse(payload, requestedPage);
+      const visibleResults = filterSearchResultsForBacklog(response.results, existingEntries);
 
-      // If a whole server page is already on the backlog, skip it locally so
-      // users do not get trapped on an empty pagination page.
-      for (let skippedPages = 0; skippedPages < 12; skippedPages += 1) {
-        const payload = await backlogApi.searchGames(queryValue, nextPage);
-        if (currentRequestId !== requestId.current) return;
-
-        response = normalizeSearchResponse(payload, nextPage);
-        visibleResults = filterSearchResultsForBacklog(response.results, existingEntries);
-        if (visibleResults.length || !response.has_next) break;
-
-        nextPage = Math.max(response.page + 1, nextPage + 1);
-      }
-
-      if (!response || currentRequestId !== requestId.current) return;
+      if (currentRequestId !== requestId.current) return;
       setResults(visibleResults);
       setPage(response.page);
       setHasNext(response.has_next);
       setHasSearched(true);
     } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
       if (currentRequestId === requestId.current) {
         setError(err instanceof Error ? err.message : "Nie udało się wyszukać gier w RAWG.");
       }
@@ -136,6 +130,7 @@ export function GameSearch({
       if (currentRequestId === requestId.current) {
         setLoading(false);
       }
+      if (activeSearch.current === controller) activeSearch.current = null;
     }
   }
 

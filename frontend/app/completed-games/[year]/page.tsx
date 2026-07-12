@@ -57,7 +57,7 @@ export default function CompletedGamesYearPage() {
   useEffect(() => {
     if (!validYear) return;
 
-    let active = true;
+    const controller = new AbortController();
     setEntriesLoading(true);
     setEntriesError(null);
     api
@@ -66,34 +66,34 @@ export default function CompletedGamesYearPage() {
         genre: filters.genres,
         rating_min: filters.ratingMin,
         rating_max: filters.ratingMax
-      })
+      }, controller.signal)
       .then((result) => {
-        if (active) setEntries(result);
+        setEntries(result);
       })
       .catch((err) => {
-        if (active) setEntriesError(err instanceof Error ? err.message : "Nie udało się pobrać ukończonych gier.");
+        if (!(err instanceof DOMException && err.name === "AbortError")) {
+          setEntriesError(err instanceof Error ? err.message : "Nie udało się pobrać ukończonych gier.");
+        }
       })
       .finally(() => {
-        if (active) setEntriesLoading(false);
+        if (!controller.signal.aborted) setEntriesLoading(false);
       });
 
-    return () => {
-      active = false;
-    };
+    return () => controller.abort();
   }, [filterQuery, filters.genres, filters.platforms, filters.ratingMax, filters.ratingMin, validYear, year]);
 
   useEffect(() => {
     if (!validYear) return;
 
-    let active = true;
+    const controller = new AbortController();
     setMetadataLoading(true);
     setMetadataError(null);
     setYears([]);
     setDashboard(null);
 
-    Promise.allSettled([api.listCompletedYears(), api.getCompletedYearDashboard(year)])
+    Promise.allSettled([api.listCompletedYears(controller.signal), api.getCompletedYearDashboard(year, controller.signal)])
       .then(([yearsResult, dashboardResult]) => {
-        if (!active) return;
+        if (controller.signal.aborted) return;
 
         const errors: string[] = [];
         if (yearsResult.status === "fulfilled") {
@@ -111,12 +111,10 @@ export default function CompletedGamesYearPage() {
         if (errors.length) setMetadataError(errors.join(" "));
       })
       .finally(() => {
-        if (active) setMetadataLoading(false);
+        if (!controller.signal.aborted) setMetadataLoading(false);
       });
 
-    return () => {
-      active = false;
-    };
+    return () => controller.abort();
   }, [validYear, year]);
 
   const monthGroups = useMemo(() => groupCompletedGamesByMonth(entries), [entries]);

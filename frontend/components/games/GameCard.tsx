@@ -25,11 +25,11 @@ export function GameCard({
 }) {
   return (
     <Card className="overflow-hidden">
-      <CardContent className="grid gap-4 p-3 sm:grid-cols-[112px_1fr] sm:p-4">
+      <CardContent className="grid grid-cols-[88px_minmax(0,1fr)] gap-3 p-3 sm:grid-cols-[112px_1fr] sm:gap-4 sm:p-4">
         <GameCover
           src={entry.game.cover_url}
           title={entry.game.title}
-          className="h-40 w-[120px] sm:h-auto sm:w-full"
+          className="h-auto w-full self-start"
         />
         <div className="min-w-0 space-y-3">
           <div className="flex items-start gap-2">
@@ -52,7 +52,7 @@ export function GameCard({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-3">
+          <div className="grid gap-2 text-sm sm:grid-cols-3">
             <Metric label="Kolejność" value={String(entry.position + 1)} />
             <Metric label="Platforma" value={entry.preferred_platform || entry.game.platforms[0] || "-"} />
             <Metric label="Gatunek" value={entry.game.genres.join(", ") || "-"} />
