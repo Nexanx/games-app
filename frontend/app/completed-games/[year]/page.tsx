@@ -1,12 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, ChevronLeft, ChevronRight, Filter, Plus, X } from "lucide-react";
 
-import { CompletedYearDashboard } from "@/components/games/CompletedYearDashboard";
-import { CompletedYearsComparison } from "@/components/games/CompletedYearsComparison";
 import { CompletedGameCard } from "@/components/games/CompletedGameCard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -26,7 +24,6 @@ import {
 import { api } from "@/services/api";
 import type {
   CompletedGameEntry,
-  CompletedGamesComparison,
   CompletedGamesYear,
   CompletedGamesYearDashboard
 } from "@/types";
@@ -55,11 +52,7 @@ export default function CompletedGamesYearPage() {
   const [metadataLoading, setMetadataLoading] = useState(true);
   const [entriesError, setEntriesError] = useState<string | null>(null);
   const [metadataError, setMetadataError] = useState<string | null>(null);
-  const [comparisonYears, setComparisonYears] = useState<number[]>([]);
-  const [comparison, setComparison] = useState<CompletedGamesComparison | null>(null);
-  const [comparisonLoading, setComparisonLoading] = useState(false);
-  const [comparisonError, setComparisonError] = useState<string | null>(null);
-  const comparisonInitialized = useRef(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   useEffect(() => {
     if (!validYear) return;
@@ -97,9 +90,6 @@ export default function CompletedGamesYearPage() {
     setMetadataError(null);
     setYears([]);
     setDashboard(null);
-    setComparisonYears([]);
-    setComparison(null);
-    comparisonInitialized.current = false;
 
     Promise.allSettled([api.listCompletedYears(), api.getCompletedYearDashboard(year)])
       .then(([yearsResult, dashboardResult]) => {
@@ -131,44 +121,6 @@ export default function CompletedGamesYearPage() {
 
   const monthGroups = useMemo(() => groupCompletedGamesByMonth(entries), [entries]);
   const navigation = useMemo(() => getYearNavigation(year, years), [year, years]);
-  const comparisonAvailableYears = useMemo(
-    () => getComparisonYears(year, years, dashboard?.completed_games_count ?? 0),
-    [dashboard?.completed_games_count, year, years]
-  );
-  const comparisonYearsKey = comparisonYears.join(",");
-
-  useEffect(() => {
-    if (comparisonInitialized.current || !comparisonAvailableYears.length) return;
-    comparisonInitialized.current = true;
-    setComparisonYears(comparisonAvailableYears.slice(0, 2).map((item) => item.year));
-  }, [comparisonAvailableYears]);
-
-  useEffect(() => {
-    if (comparisonYears.length < 2) {
-      setComparison(null);
-      setComparisonError(null);
-      return;
-    }
-
-    let active = true;
-    setComparisonLoading(true);
-    setComparisonError(null);
-    api
-      .compareCompletedYears(comparisonYears)
-      .then((result) => {
-        if (active) setComparison(result);
-      })
-      .catch((err) => {
-        if (active) setComparisonError(err instanceof Error ? err.message : "Nie udało się porównać wybranych lat.");
-      })
-      .finally(() => {
-        if (active) setComparisonLoading(false);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [comparisonYears, comparisonYearsKey]);
 
   if (!validYear) return <ErrorState message="Nieprawidłowy rok." />;
   if (metadataLoading && entriesLoading && !dashboard) {
@@ -197,14 +149,6 @@ export default function CompletedGamesYearPage() {
     updateFilters(nextFilters);
   }
 
-  function selectComparisonYears(nextYears: number[]) {
-    setComparisonYears(
-      Array.from(new Set(nextYears.filter((value) => Number.isInteger(value) && value >= 1900 && value <= 9998)))
-        .sort((left, right) => right - left)
-        .slice(0, 8)
-    );
-  }
-
   return (
     <div className="space-y-6">
       <header className="space-y-4">
@@ -215,10 +159,7 @@ export default function CompletedGamesYearPage() {
           <div>
             <p className="text-sm font-semibold text-primary">Historia roczna</p>
             <h1 className="mt-1 text-2xl font-bold sm:text-3xl">Ukończone gry — {year}</h1>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Łącznie ukończonych gier: {dashboard?.completed_games_count ?? 0}
-              {filtersActive ? ` · znaleziono po filtrach: ${entries.length}` : ""}
-            </p>
+            {filtersActive ? <p className="mt-2 text-sm text-muted-foreground">Znaleziono po filtrach: {entries.length}</p> : null}
           </div>
           <Link href="/completed-games/new"><Button><Plus className="h-4 w-4" aria-hidden="true" />Dodaj grę</Button></Link>
         </div>
@@ -241,50 +182,65 @@ export default function CompletedGamesYearPage() {
       </Card>
 
       {metadataError ? <ErrorState message={metadataError} /> : null}
-      {dashboard ? <CompletedYearDashboard dashboard={dashboard} /> : null}
+      <Button
+        type="button"
+        variant={filtersActive ? "primary" : "secondary"}
+        className="min-h-12 w-full justify-start"
+        aria-expanded={filtersOpen}
+        aria-controls="completed-games-filters"
+        onClick={() => setFiltersOpen((current) => !current)}
+      >
+        <Filter className="h-5 w-5" aria-hidden="true" />
+        <span>Filtry</span>
+        <span className="ml-auto text-xs font-normal">
+          {filtersActive ? `${getActiveFiltersCount(filters)} aktywne` : filtersOpen ? "Ukryj" : "Pokaż"}
+        </span>
+      </Button>
 
-      <Card>
-        <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3 space-y-0">
-          <div>
-            <CardTitle className="flex items-center gap-2"><Filter className="h-5 w-5 text-primary" aria-hidden="true" />Filtry wpisów</CardTitle>
-            <CardDescription>Filtry dotyczą wyłącznie wybranego roku i są zapisane w adresie URL.</CardDescription>
-          </div>
-          <Button type="button" variant="secondary" disabled={!filtersActive} onClick={() => updateFilters(emptyFilters)}>
-            <X className="h-4 w-4" aria-hidden="true" /> Wyczyść filtry
-          </Button>
-        </CardHeader>
-        <CardContent className="space-y-5">
-          <div className="grid gap-5 lg:grid-cols-2">
-            <CheckboxFilterGroup
-              legend="Platformy"
-              values={dashboard?.filter_options.platforms ?? []}
-              selected={filters.platforms}
-              onToggle={(value) => toggleFilterValue("platforms", value)}
-              emptyLabel="Brak platform w tym roku."
-            />
-            <CheckboxFilterGroup
-              legend="Gatunki"
-              values={dashboard?.filter_options.genres ?? []}
-              selected={filters.genres}
-              onToggle={(value) => toggleFilterValue("genres", value)}
-              emptyLabel="Brak gatunków w tym roku."
-            />
-          </div>
-          <fieldset>
-            <legend className="text-sm font-semibold">Ocena</legend>
-            <div className="mt-2 grid gap-3 sm:grid-cols-2">
-              <label className="space-y-1.5 text-sm text-muted-foreground">
-                <span>Od</span>
-                <Input type="number" min={0} max={10} step={0.5} value={filters.ratingMin ?? ""} onChange={(event) => updateRating("ratingMin", event.target.value)} placeholder="np. 8" />
-              </label>
-              <label className="space-y-1.5 text-sm text-muted-foreground">
-                <span>Do</span>
-                <Input type="number" min={0} max={10} step={0.5} value={filters.ratingMax ?? ""} onChange={(event) => updateRating("ratingMax", event.target.value)} placeholder="np. 10" />
-              </label>
+      {filtersOpen ? (
+        <Card id="completed-games-filters">
+          <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3 space-y-0">
+            <div>
+              <CardTitle>Filtry wpisów</CardTitle>
+              <CardDescription>Filtry dotyczą wyłącznie wybranego roku i są zapisane w adresie URL.</CardDescription>
             </div>
-          </fieldset>
-        </CardContent>
-      </Card>
+            <Button type="button" variant="secondary" disabled={!filtersActive} onClick={() => updateFilters(emptyFilters)}>
+              <X className="h-4 w-4" aria-hidden="true" /> Wyczyść filtry
+            </Button>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <div className="grid gap-5 lg:grid-cols-2">
+              <CheckboxFilterGroup
+                legend="Platformy"
+                values={dashboard?.filter_options.platforms ?? []}
+                selected={filters.platforms}
+                onToggle={(value) => toggleFilterValue("platforms", value)}
+                emptyLabel="Brak platform w tym roku."
+              />
+              <CheckboxFilterGroup
+                legend="Gatunki"
+                values={dashboard?.filter_options.genres ?? []}
+                selected={filters.genres}
+                onToggle={(value) => toggleFilterValue("genres", value)}
+                emptyLabel="Brak gatunków w tym roku."
+              />
+            </div>
+            <fieldset>
+              <legend className="text-sm font-semibold">Ocena</legend>
+              <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                <label className="space-y-1.5 text-sm text-muted-foreground">
+                  <span>Od</span>
+                  <Input type="number" min={0} max={10} step={0.5} value={filters.ratingMin ?? ""} onChange={(event) => updateRating("ratingMin", event.target.value)} placeholder="np. 8" />
+                </label>
+                <label className="space-y-1.5 text-sm text-muted-foreground">
+                  <span>Do</span>
+                  <Input type="number" min={0} max={10} step={0.5} value={filters.ratingMax ?? ""} onChange={(event) => updateRating("ratingMax", event.target.value)} placeholder="np. 10" />
+                </label>
+              </div>
+            </fieldset>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {entriesError ? <ErrorState message={entriesError} /> : null}
       {entriesLoading ? <LoadingState label="Aktualizowanie listy gier" /> : null}
@@ -301,17 +257,6 @@ export default function CompletedGamesYearPage() {
         </section>
       )) : null}
 
-      <section aria-labelledby="year-comparison-heading">
-        <h2 id="year-comparison-heading" className="sr-only">Porównanie lat</h2>
-        <CompletedYearsComparison
-          availableYears={comparisonAvailableYears}
-          selectedYears={comparisonYears}
-          comparison={comparison}
-          loading={comparisonLoading}
-          onSelectedYearsChange={selectComparisonYears}
-        />
-        {comparisonError ? <div className="mt-3"><ErrorState message={comparisonError} /></div> : null}
-      </section>
     </div>
   );
 }
@@ -346,6 +291,13 @@ function CheckboxFilterGroup({
   );
 }
 
+function getActiveFiltersCount(filters: CompletedYearFilters) {
+  return filters.platforms.length
+    + filters.genres.length
+    + Number(filters.ratingMin !== undefined)
+    + Number(filters.ratingMax !== undefined);
+}
+
 function getYearNavigation(year: number, years: CompletedGamesYear[]) {
   if (years.some((item) => item.year === year)) {
     return getAvailableYearNavigation(year, years);
@@ -356,12 +308,6 @@ function getYearNavigation(year: number, years: CompletedGamesYear[]) {
     newerYear: ordered.find((item) => item > year) ?? null,
     olderYear: ordered.find((item) => item < year) ?? null
   };
-}
-
-function getComparisonYears(year: number, years: CompletedGamesYear[], completedGamesCount: number) {
-  const current = years.find((item) => item.year === year);
-  const candidates = current ? years : [{ year, completed_games_count: completedGamesCount }, ...years];
-  return [...candidates].sort((left, right) => right.year - left.year);
 }
 
 function getErrorMessage(error: unknown, fallback: string) {

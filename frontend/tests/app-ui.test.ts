@@ -33,8 +33,10 @@ describe("application UI configuration", () => {
   });
 
   it("removes the settings tab from primary navigation", () => {
-    expect(navItems.map((item) => item.href)).not.toContain("/settings");
+    const hrefs = navItems.map((item) => item.href);
+    expect(hrefs).not.toContain("/settings");
     expect(navItems.map((item) => item.label)).not.toContain("Ustawienia");
-    expect(navItems).toHaveLength(5);
+    expect(hrefs).toContain("/analytics");
+    expect(navItems).toHaveLength(6);
   });
 });
