@@ -12,6 +12,7 @@ from app.schemas.completed_games import (
     CompletedGameHighlightRead,
     CompletedGamesComparisonRead,
     CompletedGamesComparisonYearRead,
+    CompletedGamesDistributionItemRead,
     CompletedGamesFilterOptionsRead,
     CompletedGamesMonthSummaryRead,
     CompletedGamesYearDashboardRead,
@@ -42,8 +43,9 @@ def filter_completed_entries(
 
     filtered: list[CompletedGameEntry] = []
     for entry in entries:
+        # The platform saved on the completion is authoritative. Supported game
+        # platforms are not the same thing as the platform actually chosen.
         entry_platforms = {_normalize(entry.platform)} if entry.platform else set()
-        entry_platforms.update(_normalize(value) for value in entry.game.platforms if _normalize(value))
         entry_genres = {_normalize(value) for value in entry.game.genres if _normalize(value)}
 
         if wanted_platforms and not entry_platforms.intersection(wanted_platforms):
@@ -58,33 +60,60 @@ def filter_completed_entries(
     return filtered
 
 
-def build_year_dashboard(year: int, entries: Iterable[CompletedGameEntry]) -> CompletedGamesYearDashboardRead:
+def build_year_dashboard(
+    year: int,
+    entries: Iterable[CompletedGameEntry],
+    *,
+    filter_option_entries: Iterable[CompletedGameEntry] | None = None,
+) -> CompletedGamesYearDashboardRead:
     entry_list = list(entries)
-    monthly = _monthly_summaries(entry_list, include_empty=False, descending=True)
+    monthly = _monthly_summaries(entry_list, include_empty=True, descending=False)
     ratings = [entry.rating for entry in entry_list if entry.rating is not None]
-    total_playtime = sum(entry.playtime_hours for entry in entry_list)
-    best_rated = max(
+    timed_entries = [entry for entry in entry_list if entry.playtime_hours > 0]
+    total_playtime = sum(entry.playtime_hours for entry in timed_entries)
+    rated_entries = sorted(
         (entry for entry in entry_list if entry.rating is not None),
-        key=lambda entry: (entry.rating or 0, entry.completion_date, entry.id),
-        default=None,
+        key=lambda entry: (-(entry.rating or 0), -entry.completion_date.toordinal(), entry.game.title.casefold(), entry.id),
     )
-    longest = max(
+    longest_entries = sorted(
+        timed_entries,
+        key=lambda entry: (-entry.playtime_hours, -entry.completion_date.toordinal(), entry.game.title.casefold(), entry.id),
+    )
+    shortest_entries = sorted(
+        timed_entries,
+        key=lambda entry: (entry.playtime_hours, -entry.completion_date.toordinal(), entry.game.title.casefold(), entry.id),
+    )
+    latest_entries = sorted(
         entry_list,
-        key=lambda entry: (entry.playtime_hours, entry.completion_date, entry.id),
-        default=None,
+        key=lambda entry: (-entry.completion_date.toordinal(), entry.game.title.casefold(), entry.id),
     )
+    active_months = [month for month in monthly if month.completed_games_count]
+    most_active_month = sorted(
+        active_months,
+        key=lambda month: (-month.completed_games_count, -month.total_playtime_hours, month.month),
+    )[0] if active_months else None
 
     return CompletedGamesYearDashboardRead(
         year=year,
         completed_games_count=len(entry_list),
         total_playtime_hours=_rounded(total_playtime),
-        average_playtime_hours=_rounded(total_playtime / len(entry_list)) if entry_list else None,
+        average_playtime_hours=_rounded(total_playtime / len(timed_entries)) if timed_entries else None,
+        games_with_playtime_count=len(timed_entries),
         average_rating=_rounded(sum(ratings) / len(ratings)) if ratings else None,
-        best_rated_game=_highlight(best_rated),
-        longest_game=_highlight(longest),
-        active_months_count=len(monthly),
+        rated_games_count=len(ratings),
+        best_rated_game=_highlight(rated_entries[0]) if rated_entries else None,
+        longest_game=_highlight(longest_entries[0]) if longest_entries else None,
+        shortest_game=_highlight(shortest_entries[0]) if shortest_entries else None,
+        most_active_month=most_active_month,
+        active_months_count=len(active_months),
         monthly=monthly,
-        filter_options=_filter_options(entry_list),
+        platforms=_distribution(entry_list, kind="platform"),
+        genres=_distribution(entry_list, kind="genre"),
+        best_rated_games=[_highlight(entry) for entry in rated_entries[:5]],
+        longest_games=[_highlight(entry) for entry in longest_entries[:5]],
+        shortest_games=[_highlight(entry) for entry in shortest_entries[:5]],
+        latest_completions=[_highlight(entry) for entry in latest_entries[:5]],
+        filter_options=_filter_options(filter_option_entries if filter_option_entries is not None else entry_list),
     )
 
 
@@ -115,13 +144,14 @@ def build_comparison(
     for year in ordered_years:
         entries = entries_by_year.get(year, [])
         ratings = [entry.rating for entry in entries if entry.rating is not None]
-        total_playtime = sum(entry.playtime_hours for entry in entries)
+        timed_entries = [entry for entry in entries if entry.playtime_hours > 0]
+        total_playtime = sum(entry.playtime_hours for entry in timed_entries)
         result.append(
             CompletedGamesComparisonYearRead(
                 year=year,
                 completed_games_count=len(entries),
                 total_playtime_hours=_rounded(total_playtime),
-                average_playtime_hours=_rounded(total_playtime / len(entries)) if entries else None,
+                average_playtime_hours=_rounded(total_playtime / len(timed_entries)) if timed_entries else None,
                 average_rating=_rounded(sum(ratings) / len(ratings)) if ratings else None,
                 monthly=_monthly_summaries(entries, include_empty=True, descending=False),
             )
@@ -144,11 +174,13 @@ def _monthly_summaries(
             continue
         ratings = [entry.rating for entry in month_entries if entry.rating is not None]
         total_playtime = sum(entry.playtime_hours for entry in month_entries)
+        games_with_playtime_count = sum(entry.playtime_hours > 0 for entry in month_entries)
         summaries.append(
             CompletedGamesMonthSummaryRead(
                 month=month,
                 completed_games_count=len(month_entries),
                 total_playtime_hours=_rounded(total_playtime),
+                games_with_playtime_count=games_with_playtime_count,
                 average_rating=_rounded(sum(ratings) / len(ratings)) if ratings else None,
             )
         )
@@ -160,7 +192,6 @@ def _filter_options(entries: Iterable[CompletedGameEntry]) -> CompletedGamesFilt
     genres: dict[str, str] = {}
     for entry in entries:
         values = [entry.platform] if entry.platform else []
-        values.extend(entry.game.platforms)
         for value in values:
             normalized = _normalize(value)
             if normalized:
@@ -173,6 +204,38 @@ def _filter_options(entries: Iterable[CompletedGameEntry]) -> CompletedGamesFilt
         platforms=sorted(platforms.values(), key=str.casefold),
         genres=sorted(genres.values(), key=str.casefold),
     )
+
+
+def _distribution(
+    entries: Iterable[CompletedGameEntry], *, kind: str
+) -> list[CompletedGamesDistributionItemRead]:
+    entry_list = list(entries)
+    groups: dict[str, dict[str, object]] = {}
+    for entry in entry_list:
+        if kind == "platform":
+            labels = [entry.platform.strip()] if entry.platform and entry.platform.strip() else ["Brak platformy"]
+        else:
+            labels = [value.strip() for value in entry.game.genres if value.strip()] or ["Brak gatunku"]
+        for label in dict.fromkeys(labels):
+            normalized = _normalize(label)
+            group = groups.setdefault(normalized, {"label": label, "entries": []})
+            group["entries"].append(entry)
+
+    result: list[CompletedGamesDistributionItemRead] = []
+    for group in groups.values():
+        group_entries = group["entries"]
+        group_ratings = [entry.rating for entry in group_entries if entry.rating is not None]
+        count = len(group_entries)
+        result.append(
+            CompletedGamesDistributionItemRead(
+                label=str(group["label"]),
+                completed_games_count=count,
+                percentage=_rounded(count * 100 / len(entry_list)) if entry_list else None,
+                total_playtime_hours=_rounded(sum(entry.playtime_hours for entry in group_entries if entry.playtime_hours > 0)),
+                average_rating=_rounded(sum(group_ratings) / len(group_ratings)) if group_ratings else None,
+            )
+        )
+    return sorted(result, key=lambda item: (-item.completed_games_count, item.label.casefold()))
 
 
 def _highlight(entry: CompletedGameEntry | None) -> CompletedGameHighlightRead | None:

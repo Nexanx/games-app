@@ -62,6 +62,7 @@ export default function CompletedGamesYearPage() {
     setEntriesError(null);
     api
       .listCompletedGames(year, {
+        month: filters.month,
         platform: filters.platforms,
         genre: filters.genres,
         rating_min: filters.ratingMin,
@@ -80,7 +81,7 @@ export default function CompletedGamesYearPage() {
       });
 
     return () => controller.abort();
-  }, [filterQuery, filters.genres, filters.platforms, filters.ratingMax, filters.ratingMin, validYear, year]);
+  }, [filterQuery, filters.genres, filters.month, filters.platforms, filters.ratingMax, filters.ratingMin, validYear, year]);
 
   useEffect(() => {
     if (!validYear) return;
@@ -91,7 +92,7 @@ export default function CompletedGamesYearPage() {
     setYears([]);
     setDashboard(null);
 
-    Promise.allSettled([api.listCompletedYears(controller.signal), api.getCompletedYearDashboard(year, controller.signal)])
+    Promise.allSettled([api.listCompletedYears(controller.signal), api.getCompletedYearDashboard(year, {}, controller.signal)])
       .then(([yearsResult, dashboardResult]) => {
         if (controller.signal.aborted) return;
 
@@ -290,7 +291,8 @@ function CheckboxFilterGroup({
 }
 
 function getActiveFiltersCount(filters: CompletedYearFilters) {
-  return filters.platforms.length
+  return Number(filters.month !== undefined)
+    + filters.platforms.length
     + filters.genres.length
     + Number(filters.ratingMin !== undefined)
     + Number(filters.ratingMax !== undefined);

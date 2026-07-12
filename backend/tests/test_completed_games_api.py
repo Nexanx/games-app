@@ -6,10 +6,16 @@ from sqlalchemy import func, select
 from app.models import BacklogEntry, CompletedGameEntry, Game
 
 
-def add_game(db_session, title: str, *, platforms: list[str] | None = None) -> Game:
+def add_game(
+    db_session,
+    title: str,
+    *,
+    platforms: list[str] | None = None,
+    genres: list[str] | None = None,
+) -> Game:
     game = Game(
         title=title,
-        genres=["RPG"],
+        genres=genres or ["RPG"],
         platforms=platforms or ["PC"],
         external_source="manual",
     )
@@ -182,7 +188,9 @@ def test_year_dashboard_returns_aggregates_months_and_filter_options(client, db_
     assert payload["best_rated_game"]["title"] == "RPG Game"
     assert payload["longest_game"]["title"] == "Action Game"
     assert payload["active_months_count"] == 2
-    assert [item["month"] for item in payload["monthly"]] == [7, 6]
+    assert [item["month"] for item in payload["monthly"]] == list(range(1, 13))
+    assert payload["monthly"][5]["completed_games_count"] == 1
+    assert payload["monthly"][6]["completed_games_count"] == 1
     assert payload["filter_options"]["platforms"] == ["PC", "PlayStation 5"]
     assert payload["filter_options"]["genres"] == ["RPG"]
 
@@ -237,15 +245,88 @@ def test_empty_year_dashboard_uses_clear_empty_values(client):
     response = client.get("/api/completed-games/year/2026/dashboard")
 
     assert response.status_code == 200
-    assert response.json() == {
+    payload = response.json()
+    assert payload == {
         "year": 2026,
         "completed_games_count": 0,
         "total_playtime_hours": 0.0,
         "average_playtime_hours": None,
+        "games_with_playtime_count": 0,
         "average_rating": None,
+        "rated_games_count": 0,
         "best_rated_game": None,
         "longest_game": None,
+        "shortest_game": None,
+        "most_active_month": None,
         "active_months_count": 0,
-        "monthly": [],
+        "monthly": [
+            {"month": month, "completed_games_count": 0, "total_playtime_hours": 0.0, "games_with_playtime_count": 0, "average_rating": None}
+            for month in range(1, 13)
+        ],
+        "platforms": [],
+        "genres": [],
+        "best_rated_games": [],
+        "longest_games": [],
+        "shortest_games": [],
+        "latest_completions": [],
         "filter_options": {"platforms": [], "genres": []},
     }
+
+
+def test_dashboard_ignores_missing_ratings_and_zero_time_in_averages(client, db_session):
+    timed = add_game(db_session, "Timed")
+    missing = add_game(db_session, "Missing values")
+    db_session.add_all(
+        [
+            CompletedGameEntry(game_id=timed.id, completion_date=date(2026, 2, 1), playtime_hours=12.5, rating=8.5, platform="PC"),
+            CompletedGameEntry(game_id=missing.id, completion_date=date(2026, 2, 2), playtime_hours=0, rating=None),
+        ]
+    )
+    db_session.commit()
+
+    payload = client.get("/api/completed-games/year/2026/dashboard").json()
+
+    assert payload["completed_games_count"] == 2
+    assert payload["total_playtime_hours"] == 12.5
+    assert payload["average_playtime_hours"] == 12.5
+    assert payload["games_with_playtime_count"] == 1
+    assert payload["average_rating"] == 8.5
+    assert payload["rated_games_count"] == 1
+    assert payload["longest_game"]["title"] == "Timed"
+    assert payload["shortest_game"]["title"] == "Timed"
+
+
+def test_dashboard_counts_each_genre_and_uses_completion_platform(client, db_session):
+    multi = add_game(db_session, "Multi", platforms=["PC", "PlayStation 5"], genres=["RPG", "Akcja"])
+    db_session.add(CompletedGameEntry(game_id=multi.id, completion_date=date(2026, 3, 1), playtime_hours=10, rating=9, platform="PlayStation 5"))
+    db_session.commit()
+
+    payload = client.get("/api/completed-games/year/2026/dashboard").json()
+    filtered_pc = client.get("/api/completed-games/year/2026/dashboard", params={"platform": "PC"}).json()
+
+    assert [
+        (item["label"], item["completed_games_count"], item["percentage"])
+        for item in payload["genres"]
+    ] == [("Akcja", 1, 100.0), ("RPG", 1, 100.0)]
+    assert payload["platforms"] == [{"label": "PlayStation 5", "completed_games_count": 1, "percentage": 100.0, "total_playtime_hours": 10.0, "average_rating": 9.0}]
+    assert filtered_pc["completed_games_count"] == 0
+    assert payload["filter_options"]["platforms"] == ["PlayStation 5"]
+
+
+def test_dashboard_filters_apply_to_all_aggregates_and_keep_year_options(client, db_session):
+    pc = add_game(db_session, "PC RPG", genres=["RPG"])
+    console = add_game(db_session, "Console Action", genres=["Akcja"])
+    db_session.add_all([
+        CompletedGameEntry(game_id=pc.id, completion_date=date(2026, 5, 1), playtime_hours=20, rating=9, platform="PC"),
+        CompletedGameEntry(game_id=console.id, completion_date=date(2026, 6, 1), playtime_hours=5, rating=6, platform="PlayStation 5"),
+    ])
+    db_session.commit()
+
+    payload = client.get("/api/completed-games/year/2026/dashboard", params={"month": 5, "genre": "rpg", "rating_min": 8}).json()
+
+    assert payload["completed_games_count"] == 1
+    assert payload["total_playtime_hours"] == 20
+    assert payload["best_rated_games"][0]["title"] == "PC RPG"
+    assert payload["monthly"][4]["completed_games_count"] == 1
+    assert sum(item["completed_games_count"] for item in payload["monthly"]) == 1
+    assert payload["filter_options"] == {"platforms": ["PC", "PlayStation 5"], "genres": ["Akcja", "RPG"]}

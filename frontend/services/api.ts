@@ -161,8 +161,8 @@ export const api = {
   listCompletedYears: (signal?: AbortSignal) => request<CompletedGamesYear[]>("/completed-games/years", { signal }),
   listCompletedGames: (year: number, filters: CompletedGamesFilters = {}, signal?: AbortSignal) =>
     request<CompletedGameEntry[]>(`/completed-games${qs({ year, ...filters })}`, { signal }),
-  getCompletedYearDashboard: (year: number, signal?: AbortSignal) =>
-    request<CompletedGamesYearDashboard>(`/completed-games/year/${year}/dashboard`, { signal }),
+  getCompletedYearDashboard: (year: number, filters: CompletedGamesFilters = {}, signal?: AbortSignal) =>
+    request<CompletedGamesYearDashboard>(`/completed-games/year/${year}/dashboard${qs({ ...filters })}`, { signal }),
   compareCompletedYears: (years: number[]) =>
     request<CompletedGamesComparison>(`/completed-games/comparison${qs({ years: years.join(",") })}`),
   getCompletedGame: (id: number) => request<CompletedGameEntry>(`/completed-games/${id}`),

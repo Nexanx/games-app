@@ -88,6 +88,7 @@ export interface CompletedGamesMonthSummary {
   month: number;
   completed_games_count: number;
   total_playtime_hours: number;
+  games_with_playtime_count: number;
   average_rating?: number | null;
 }
 
@@ -96,16 +97,34 @@ export interface CompletedGamesFilterOptions {
   genres: string[];
 }
 
+export interface CompletedGamesDistributionItem {
+  label: string;
+  completed_games_count: number;
+  percentage?: number | null;
+  total_playtime_hours: number;
+  average_rating?: number | null;
+}
+
 export interface CompletedGamesYearDashboard {
   year: number;
   completed_games_count: number;
   total_playtime_hours: number;
   average_playtime_hours?: number | null;
+  games_with_playtime_count: number;
   average_rating?: number | null;
+  rated_games_count: number;
   best_rated_game?: CompletedGameHighlight | null;
   longest_game?: CompletedGameHighlight | null;
+  shortest_game?: CompletedGameHighlight | null;
+  most_active_month?: CompletedGamesMonthSummary | null;
   active_months_count: number;
   monthly: CompletedGamesMonthSummary[];
+  platforms: CompletedGamesDistributionItem[];
+  genres: CompletedGamesDistributionItem[];
+  best_rated_games: CompletedGameHighlight[];
+  longest_games: CompletedGameHighlight[];
+  shortest_games: CompletedGameHighlight[];
+  latest_completions: CompletedGameHighlight[];
   filter_options: CompletedGamesFilterOptions;
 }
 

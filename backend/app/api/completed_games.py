@@ -71,11 +71,27 @@ def list_completed_games(
 @router.get("/year/{year}/dashboard", response_model=CompletedGamesYearDashboardRead)
 def get_completed_games_year_dashboard(
     year: int,
+    month: int | None = Query(default=None, ge=1, le=12),
+    platform: list[str] | None = Query(default=None),
+    genre: list[str] | None = Query(default=None),
+    rating_min: float | None = Query(default=None, ge=0, le=10),
+    rating_max: float | None = Query(default=None, ge=0, le=10),
     db: Session = Depends(get_session),
 ) -> CompletedGamesYearDashboardRead:
     if year < 1900 or year > 9998:
         raise HTTPException(status_code=422, detail="Invalid year")
-    return build_year_dashboard(year, get_completed_entries_for_year(db, year))
+    if rating_min is not None and rating_max is not None and rating_min > rating_max:
+        raise HTTPException(status_code=422, detail="rating_min cannot be greater than rating_max")
+    year_entries = get_completed_entries_for_year(db, year)
+    period_entries = [entry for entry in year_entries if month is None or entry.completion_date.month == month]
+    filtered_entries = filter_completed_entries(
+        period_entries,
+        platforms=platform or [],
+        genres=genre or [],
+        rating_min=rating_min,
+        rating_max=rating_max,
+    )
+    return build_year_dashboard(year, filtered_entries, filter_option_entries=year_entries)
 
 
 @router.get("/comparison", response_model=CompletedGamesComparisonRead)

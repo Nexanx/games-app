@@ -22,6 +22,7 @@ export type CompletedGamesMonthGroup = {
 };
 
 export type CompletedYearFilters = {
+  month?: number;
   platforms: string[];
   genres: string[];
   ratingMin?: number;
@@ -63,9 +64,11 @@ export function currentCompletedGamesYear(now = new Date()) {
 }
 
 export function completedYearFiltersFromSearchParams(params: Pick<URLSearchParams, "get" | "getAll">): CompletedYearFilters {
+  const month = parseMonth(params.get("month"));
   const ratingMin = parseRating(params.get("rating_min"));
   const ratingMax = parseRating(params.get("rating_max"));
   return {
+    month,
     platforms: uniqueValues(params.getAll("platform")),
     genres: uniqueValues(params.getAll("genre")),
     ratingMin,
@@ -75,6 +78,7 @@ export function completedYearFiltersFromSearchParams(params: Pick<URLSearchParam
 
 export function completedYearFiltersToSearchParams(filters: CompletedYearFilters) {
   const params = new URLSearchParams();
+  if (filters.month !== undefined) params.set("month", String(filters.month));
   uniqueValues(filters.platforms).forEach((platform) => params.append("platform", platform));
   uniqueValues(filters.genres).forEach((genre) => params.append("genre", genre));
   if (filters.ratingMin !== undefined) params.set("rating_min", String(filters.ratingMin));
@@ -83,7 +87,7 @@ export function completedYearFiltersToSearchParams(filters: CompletedYearFilters
 }
 
 export function hasCompletedYearFilters(filters: CompletedYearFilters) {
-  return Boolean(filters.platforms.length || filters.genres.length || filters.ratingMin !== undefined || filters.ratingMax !== undefined);
+  return Boolean(filters.month !== undefined || filters.platforms.length || filters.genres.length || filters.ratingMin !== undefined || filters.ratingMax !== undefined);
 }
 
 function uniqueValues(values: string[]) {
@@ -94,4 +98,10 @@ function parseRating(value: string | null) {
   if (value === null || value.trim() === "") return undefined;
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed >= 0 && parsed <= 10 ? parsed : undefined;
+}
+
+function parseMonth(value: string | null) {
+  if (value === null || value.trim() === "") return undefined;
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= 1 && parsed <= 12 ? parsed : undefined;
 }

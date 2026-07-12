@@ -61,13 +61,13 @@ describe("completed games grouping", () => {
 
   it("keeps combined filters in the URL and can clear their state", () => {
     const filters = completedYearFiltersFromSearchParams(
-      new URLSearchParams("platform=PC&platform=PS5&genre=RPG&rating_min=8&rating_max=9")
+      new URLSearchParams("month=7&platform=PC&platform=PS5&genre=RPG&rating_min=8&rating_max=9")
     );
 
-    expect(filters).toEqual({ platforms: ["PC", "PS5"], genres: ["RPG"], ratingMin: 8, ratingMax: 9 });
+    expect(filters).toEqual({ month: 7, platforms: ["PC", "PS5"], genres: ["RPG"], ratingMin: 8, ratingMax: 9 });
     expect(hasCompletedYearFilters(filters)).toBe(true);
     expect(completedYearFiltersToSearchParams(filters).toString()).toBe(
-      "platform=PC&platform=PS5&genre=RPG&rating_min=8&rating_max=9"
+      "month=7&platform=PC&platform=PS5&genre=RPG&rating_min=8&rating_max=9"
     );
     expect(hasCompletedYearFilters({ platforms: [], genres: [] })).toBe(false);
   });
