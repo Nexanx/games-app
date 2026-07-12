@@ -1,7 +1,7 @@
 "use client";
 
 import { Gamepad2 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 import { getGameCoverInitials, getGameCoverSource, type GameCoverVariant } from "@/lib/game-cover";
 import { cn } from "@/lib/utils";
@@ -24,17 +24,14 @@ export function GameCover({
   priority?: boolean;
 }) {
   const imageSource = useMemo(() => getGameCoverSource(src, variant), [src, variant]);
-  const [state, setState] = useState<"loading" | "ready" | "fallback">(
-    imageSource ? "loading" : "fallback"
-  );
+  const [loadedSource, setLoadedSource] = useState<string | null>(null);
+  const [failedSource, setFailedSource] = useState<string | null>(null);
   const isDecorative = alt === "";
   const altText = alt ?? `Okładka gry ${title || "bez tytułu"}`;
 
-  useEffect(() => {
-    setState(imageSource ? "loading" : "fallback");
-  }, [imageSource]);
-
-  const showFallback = state === "fallback";
+  const showFallback = !imageSource || failedSource === imageSource;
+  const isReady = imageSource !== null && loadedSource === imageSource;
+  const isLoading = imageSource !== null && !isReady && !showFallback;
 
   return (
     <div
@@ -43,7 +40,7 @@ export function GameCover({
         className
       )}
     >
-      {state === "loading" ? (
+      {isLoading ? (
         <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-muted via-background/50 to-muted" aria-hidden="true" />
       ) : null}
 
@@ -65,11 +62,11 @@ export function GameCover({
           alt={altText}
           loading={priority ? "eager" : "lazy"}
           decoding="async"
-          onLoad={() => setState("ready")}
-          onError={() => setState("fallback")}
+          onLoad={() => setLoadedSource(imageSource)}
+          onError={() => setFailedSource(imageSource)}
           className={cn(
             "h-full w-full object-cover transition-opacity duration-200",
-            state === "ready" ? "opacity-100" : "opacity-0",
+            isReady ? "opacity-100" : "opacity-0",
             imageClassName
           )}
         />
