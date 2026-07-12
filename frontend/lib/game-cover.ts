@@ -1,7 +1,7 @@
 export type GameCoverVariant = "thumbnail" | "card" | "detail";
 
 const rawgWidthByVariant: Record<GameCoverVariant, number> = {
-  thumbnail: 240,
+  thumbnail: 200,
   card: 420,
   detail: 640
 };
