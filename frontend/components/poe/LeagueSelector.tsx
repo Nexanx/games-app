@@ -7,15 +7,17 @@ export function LeagueSelector({
   leagues,
   value,
   onChange,
-  includeAll = false
+  includeAll = false,
+  ariaLabel = "Wybór ligi"
 }: {
   leagues: PoeLeague[];
   value: string;
   onChange: (value: string) => void;
   includeAll?: boolean;
+  ariaLabel?: string;
 }) {
   return (
-    <Select value={value} onChange={(event) => onChange(event.target.value)}>
+    <Select aria-label={ariaLabel} value={value} onChange={(event) => onChange(event.target.value)}>
       {includeAll ? <option value="">Wszystkie ligi</option> : <option value="">Bez ligi</option>}
       {leagues.map((league) => (
         <option key={league.id} value={league.id}>
@@ -25,4 +27,3 @@ export function LeagueSelector({
     </Select>
   );
 }
-

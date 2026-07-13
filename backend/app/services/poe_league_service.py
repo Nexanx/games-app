@@ -1,40 +1,30 @@
-from sqlalchemy import select
+from sqlalchemy import select, tuple_
 from sqlalchemy.orm import Session
 
 from app.integrations.poe_leagues import PoeLeagueCandidate
 from app.models import PoeLeague
 
 
-def get_or_create_league_by_name(db: Session, name: str, game_version: str, notes: str | None = None) -> PoeLeague:
-    league = db.scalar(select(PoeLeague).where(PoeLeague.name == name, PoeLeague.game_version == game_version))
-    if league:
-        return league
-
-    league = PoeLeague(name=name, game_version=game_version, status="active", notes=notes)
-    db.add(league)
-    db.commit()
-    db.refresh(league)
-    return league
-
-
 def upsert_poe_leagues(db: Session, candidates: list[PoeLeagueCandidate]) -> tuple[int, int, list[PoeLeague]]:
     created = 0
     updated = 0
     synced: list[PoeLeague] = []
-    seen: set[tuple[str, str]] = set()
-
+    unique_candidates: dict[tuple[str, str], PoeLeagueCandidate] = {}
     for candidate in candidates:
-        key = (candidate.name, candidate.game_version)
-        if key in seen:
-            continue
-        seen.add(key)
+        unique_candidates.setdefault((candidate.name, candidate.game_version), candidate)
 
-        league = db.scalar(
-            select(PoeLeague).where(
-                PoeLeague.name == candidate.name,
-                PoeLeague.game_version == candidate.game_version,
-            )
+    if not unique_candidates:
+        return 0, 0, []
+
+    existing = db.scalars(
+        select(PoeLeague).where(
+            tuple_(PoeLeague.name, PoeLeague.game_version).in_(list(unique_candidates))
         )
+    ).all()
+    by_identity = {(league.name, league.game_version): league for league in existing}
+
+    for key, candidate in unique_candidates.items():
+        league = by_identity.get(key)
         if not league:
             league = PoeLeague(
                 name=candidate.name,
@@ -62,6 +52,4 @@ def upsert_poe_leagues(db: Session, candidates: list[PoeLeagueCandidate]) -> tup
         synced.append(league)
 
     db.commit()
-    for league in synced:
-        db.refresh(league)
     return created, updated, synced

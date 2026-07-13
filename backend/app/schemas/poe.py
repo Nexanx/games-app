@@ -1,6 +1,19 @@
 from datetime import date, datetime
+from urllib.parse import urlparse
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+
+def _is_http_url(value: str) -> bool:
+    parsed = urlparse(value)
+    return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
+
+
+def _is_poe_ninja_url(value: str) -> bool:
+    if not _is_http_url(value):
+        return False
+    hostname = (urlparse(value).hostname or "").lower()
+    return hostname == "poe.ninja" or hostname.endswith(".poe.ninja") or hostname == "poe2.ninja"
 
 
 class PoeLeagueBase(BaseModel):
@@ -13,7 +26,12 @@ class PoeLeagueBase(BaseModel):
 
 
 class PoeLeagueCreate(PoeLeagueBase):
-    pass
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, value: str) -> str:
+        if value not in {"active", "completed", "planned"}:
+            raise ValueError("Nieobsługiwany status ligi.")
+        return value
 
 
 class PoeLeagueUpdate(BaseModel):
@@ -23,6 +41,13 @@ class PoeLeagueUpdate(BaseModel):
     end_date: date | None = None
     status: str | None = None
     notes: str | None = None
+
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, value: str | None) -> str | None:
+        if value is not None and value not in {"active", "completed", "planned"}:
+            raise ValueError("Nieobsługiwany status ligi.")
+        return value
 
 
 class PoeLeagueRead(PoeLeagueBase):
@@ -56,13 +81,33 @@ class PoeCharacterBase(BaseModel):
     build_name: str | None = None
     main_skill: str | None = None
     mode: str | None = None
-    status: str = "active"
+    status: str = "ended"
     playtime_minutes: int = Field(default=0, ge=0)
+    snapshot_source: str = Field(default="manual", pattern="^(manual|pob|poe_ninja_pob)$")
     notes: str | None = None
 
 
 class PoeCharacterCreate(PoeCharacterBase):
-    pass
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, value: str) -> str:
+        if value not in {"active", "ended", "rip", "test", "deleted"}:
+            raise ValueError("Nieobsługiwany status postaci.")
+        return value
+
+    @field_validator("poe_ninja_url")
+    @classmethod
+    def validate_poe_ninja_url(cls, value: str | None) -> str | None:
+        if value and not _is_poe_ninja_url(value):
+            raise ValueError("Link poe.ninja musi prowadzić do domeny poe.ninja.")
+        return value
+
+    @field_validator("profile_url")
+    @classmethod
+    def validate_profile_url(cls, value: str | None) -> str | None:
+        if value and not _is_http_url(value):
+            raise ValueError("Link profilu musi być poprawnym adresem HTTP lub HTTPS.")
+        return value
 
 
 class PoeCharacterUpdate(BaseModel):
@@ -79,7 +124,29 @@ class PoeCharacterUpdate(BaseModel):
     mode: str | None = None
     status: str | None = None
     playtime_minutes: int | None = Field(default=None, ge=0)
+    snapshot_source: str | None = Field(default=None, pattern="^(manual|pob|poe_ninja_pob)$")
     notes: str | None = None
+
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, value: str | None) -> str | None:
+        if value is not None and value not in {"active", "ended", "rip", "test", "deleted"}:
+            raise ValueError("Nieobsługiwany status postaci.")
+        return value
+
+    @field_validator("poe_ninja_url")
+    @classmethod
+    def validate_poe_ninja_url(cls, value: str | None) -> str | None:
+        if value and not _is_poe_ninja_url(value):
+            raise ValueError("Link poe.ninja musi prowadzić do domeny poe.ninja.")
+        return value
+
+    @field_validator("profile_url")
+    @classmethod
+    def validate_profile_url(cls, value: str | None) -> str | None:
+        if value and not _is_http_url(value):
+            raise ValueError("Link profilu musi być poprawnym adresem HTTP lub HTTPS.")
+        return value
 
 
 class PoeCharacterRead(PoeCharacterBase):
@@ -89,6 +156,52 @@ class PoeCharacterRead(PoeCharacterBase):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class PoeEquipmentItemBase(BaseModel):
+    slot: str = Field(..., min_length=1, max_length=80)
+    name: str = Field(..., min_length=1, max_length=255)
+    base_type: str | None = Field(default=None, max_length=255)
+    rarity: str | None = Field(default=None, max_length=40)
+    item_text: str = Field(..., min_length=1, max_length=20_000)
+    display_order: int = Field(default=0, ge=0)
+
+
+class PoeEquipmentItemRead(PoeEquipmentItemBase):
+    id: int
+    character_id: int
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PoeBuildCodeRequest(BaseModel):
+    code: str = Field(..., min_length=20, max_length=2_000_000)
+
+
+class PoeBuildPreview(BaseModel):
+    game_version: str = Field(..., pattern="^poe[12]$")
+    character_class: str | None = None
+    ascendancy: str | None = None
+    level: int = Field(..., ge=1, le=100)
+    equipment_count: int = Field(..., ge=0)
+
+
+class PoeCharacterPobImport(PoeBuildCodeRequest):
+    name: str = Field(..., min_length=1, max_length=255)
+    league_id: int | None = None
+    poe_ninja_url: str | None = None
+    status: str = Field(default="ended", pattern="^(active|ended|rip|test|deleted)$")
+    playtime_minutes: int = Field(default=0, ge=0)
+    notes: str | None = None
+
+    @field_validator("poe_ninja_url")
+    @classmethod
+    def validate_poe_ninja_url(cls, value: str | None) -> str | None:
+        if value and not _is_poe_ninja_url(value):
+            raise ValueError("Link źródłowy musi prowadzić do domeny poe.ninja.")
+        return value
 
 
 class PoeCurrencyStatBase(BaseModel):
@@ -102,7 +215,12 @@ class PoeCurrencyStatBase(BaseModel):
 
 
 class PoeCurrencyStatCreate(PoeCurrencyStatBase):
-    pass
+    @field_validator("icon_url")
+    @classmethod
+    def validate_icon_url(cls, value: str | None) -> str | None:
+        if value and not _is_http_url(value):
+            raise ValueError("Link ikony musi być poprawnym adresem HTTP lub HTTPS.")
+        return value
 
 
 class PoeCurrencyStatUpdate(BaseModel):
@@ -113,6 +231,13 @@ class PoeCurrencyStatUpdate(BaseModel):
     value: float | None = None
     display_order: int | None = None
     notes: str | None = None
+
+    @field_validator("icon_url")
+    @classmethod
+    def validate_icon_url(cls, value: str | None) -> str | None:
+        if value and not _is_http_url(value):
+            raise ValueError("Link ikony musi być poprawnym adresem HTTP lub HTTPS.")
+        return value
 
 
 class PoeCurrencyStatRead(PoeCurrencyStatBase):
@@ -126,24 +251,3 @@ class PoeCurrencyStatRead(PoeCurrencyStatBase):
 
 class PoeStatsReorder(BaseModel):
     ordered_ids: list[int] = Field(..., min_length=1)
-
-
-class PoeNinjaImportRequest(BaseModel):
-    url: str = Field(..., min_length=5)
-
-
-class PoeNinjaImportResult(BaseModel):
-    name: str | None = None
-    game_version: str = "poe1"
-    character_class: str | None = None
-    ascendancy: str | None = None
-    level: int | None = None
-    league_name: str | None = None
-    league_id: int | None = None
-    poe_ninja_url: str
-    profile_url: str | None = None
-    build_name: str | None = None
-    main_skill: str | None = None
-    mode: str | None = None
-    status: str = "manual_review"
-    notes: str

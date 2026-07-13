@@ -7,6 +7,7 @@ from app.models.entities import (
     CustomStatistic,
     PoeCharacter,
     PoeCurrencyStat,
+    PoeEquipmentItem,
     PoeLeague,
 )
 
@@ -19,5 +20,6 @@ __all__ = [
     "CustomStatistic",
     "PoeCharacter",
     "PoeCurrencyStat",
+    "PoeEquipmentItem",
     "PoeLeague",
 ]

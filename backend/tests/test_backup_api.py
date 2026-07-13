@@ -11,6 +11,7 @@ from app.models import (
     Game,
     PoeCharacter,
     PoeCurrencyStat,
+    PoeEquipmentItem,
     PoeLeague,
 )
 
@@ -44,6 +45,16 @@ def seed_backup_data(db_session):
     db_session.add(character)
     db_session.flush()
     db_session.add(PoeCurrencyStat(character_id=character.id, league_id=league.id, name="Chaos Orb", category="currency", value=12))
+    db_session.add(
+        PoeEquipmentItem(
+            character_id=character.id,
+            slot="Helmet",
+            name="Crown of the Inward Eye",
+            base_type="Prophet Crown",
+            rarity="unique",
+            item_text="Rarity: UNIQUE\nCrown of the Inward Eye\nProphet Crown",
+        )
+    )
     session = ChatSession(title="Pytanie o grę")
     db_session.add(session)
     db_session.flush()
@@ -62,7 +73,7 @@ def test_export_and_replace_import_restore_relations_without_secrets(client, db_
     imported = client.post("/api/backup/import", json={"mode": "replace", "backup": payload})
 
     assert exported.status_code == 200
-    assert payload["format_version"] == 1
+    assert payload["format_version"] == 2
     assert "OPENAI_API_KEY" not in exported.text
     assert imported.status_code == 200
     assert imported.json()["restored"]["games"] == 1
@@ -71,6 +82,7 @@ def test_export_and_replace_import_restore_relations_without_secrets(client, db_
     assert db_session.scalar(select(func.count(CompletedGameEntry.id))) == 1
     assert db_session.scalar(select(func.count(CustomStatistic.id))) == 1
     assert db_session.scalar(select(func.count(PoeCharacter.id))) == 1
+    assert db_session.scalar(select(func.count(PoeEquipmentItem.id))) == 1
     assert db_session.scalar(select(func.count(ChatMessage.id))) == 1
     restored_completed = db_session.scalar(select(CompletedGameEntry))
     restored_statistic = db_session.scalar(select(CustomStatistic))
@@ -97,8 +109,25 @@ def test_unsupported_backup_format_is_rejected_before_database_changes(client, d
     db_session.commit()
     response = client.post(
         "/api/backup/import",
-        json={"mode": "replace", "backup": {"format_version": 2, "exported_at": now, "data": {}}},
+        json={"mode": "replace", "backup": {"format_version": 99, "exported_at": now, "data": {}}},
     )
 
     assert response.status_code == 422
     assert db_session.scalar(select(func.count(Game.id))) == 1
+
+
+def test_version_one_backup_remains_importable_without_snapshot_fields(client, db_session):
+    seed_backup_data(db_session)
+    payload = client.get("/api/backup/export").json()
+    payload["format_version"] = 1
+    payload["data"].pop("poe_equipment_items")
+    for character in payload["data"]["poe_characters"]:
+        character.pop("snapshot_source")
+
+    response = client.post("/api/backup/import", json={"mode": "replace", "backup": payload})
+
+    assert response.status_code == 200
+    assert response.json()["restored"]["poe_equipment_items"] == 0
+    restored_character = db_session.scalar(select(PoeCharacter))
+    assert restored_character.snapshot_source == "manual"
+    assert db_session.scalar(select(func.count(PoeEquipmentItem.id))) == 0

@@ -309,15 +309,31 @@ export interface PoeCharacter {
   mode?: string | null;
   status: string;
   playtime_minutes: number;
+  snapshot_source: "manual" | "pob" | "poe_ninja_pob";
   notes?: string | null;
   created_at: string;
   updated_at: string;
 }
 
-export interface PoeNinjaImportResult extends Partial<PoeCharacter> {
-  league_name?: string | null;
-  league_id?: number | null;
-  notes: string;
+export interface PoeEquipmentItem {
+  id: number;
+  character_id: number;
+  slot: string;
+  name: string;
+  base_type?: string | null;
+  rarity?: string | null;
+  item_text: string;
+  display_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PoeBuildPreview {
+  game_version: PoeVersion;
+  character_class?: string | null;
+  ascendancy?: string | null;
+  level: number;
+  equipment_count: number;
 }
 
 export interface PoeCurrencyStat {

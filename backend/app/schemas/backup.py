@@ -4,7 +4,7 @@ from typing import Literal
 from pydantic import BaseModel, Field, model_validator
 
 
-BACKUP_FORMAT_VERSION = 1
+BACKUP_FORMAT_VERSION = 2
 
 
 class BackupGame(BaseModel):
@@ -81,6 +81,7 @@ class BackupPoeCharacter(BaseModel):
     mode: str | None = None
     status: str
     playtime_minutes: int = Field(..., ge=0)
+    snapshot_source: str = "manual"
     notes: str | None = None
     created_at: datetime
     updated_at: datetime
@@ -96,6 +97,19 @@ class BackupPoeCurrencyStatistic(BaseModel):
     value: float
     display_order: int = Field(..., ge=0)
     notes: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class BackupPoeEquipmentItem(BaseModel):
+    id: int = Field(..., gt=0)
+    character_id: int = Field(..., gt=0)
+    slot: str = Field(..., min_length=1, max_length=80)
+    name: str = Field(..., min_length=1, max_length=255)
+    base_type: str | None = None
+    rarity: str | None = None
+    item_text: str = Field(..., min_length=1)
+    display_order: int = Field(..., ge=0)
     created_at: datetime
     updated_at: datetime
 
@@ -123,6 +137,7 @@ class BackupData(BaseModel):
     poe_leagues: list[BackupPoeLeague] = Field(default_factory=list)
     poe_characters: list[BackupPoeCharacter] = Field(default_factory=list)
     poe_currency_statistics: list[BackupPoeCurrencyStatistic] = Field(default_factory=list)
+    poe_equipment_items: list[BackupPoeEquipmentItem] = Field(default_factory=list)
     chat_sessions: list[BackupChatSession] = Field(default_factory=list)
     chat_messages: list[BackupChatMessage] = Field(default_factory=list)
     settings: dict[str, str] = Field(default_factory=dict)
@@ -136,6 +151,7 @@ class BackupData(BaseModel):
         _ensure_unique_ids("poe_leagues", self.poe_leagues)
         _ensure_unique_ids("poe_characters", self.poe_characters)
         _ensure_unique_ids("poe_currency_statistics", self.poe_currency_statistics)
+        _ensure_unique_ids("poe_equipment_items", self.poe_equipment_items)
         _ensure_unique_ids("chat_sessions", self.chat_sessions)
         _ensure_unique_ids("chat_messages", self.chat_messages)
 
@@ -156,6 +172,8 @@ class BackupData(BaseModel):
             raise ValueError("PoE character refers to a missing league.")
         if any(item.character_id not in character_ids for item in self.poe_currency_statistics):
             raise ValueError("PoE statistic refers to a missing character.")
+        if any(item.character_id not in character_ids for item in self.poe_equipment_items):
+            raise ValueError("PoE equipment item refers to a missing character.")
         if any(item.league_id is not None and item.league_id not in league_ids for item in self.poe_currency_statistics):
             raise ValueError("PoE statistic refers to a missing league.")
         if any(item.session_id not in session_ids for item in self.chat_messages):
@@ -164,7 +182,7 @@ class BackupData(BaseModel):
 
 
 class BackupDocument(BaseModel):
-    format_version: Literal[BACKUP_FORMAT_VERSION] = BACKUP_FORMAT_VERSION
+    format_version: Literal[1, BACKUP_FORMAT_VERSION] = BACKUP_FORMAT_VERSION
     exported_at: datetime
     app_name: str = "Games Tracker"
     data: BackupData

@@ -22,9 +22,10 @@ import type {
   CustomStatistic,
   PoeCharacter,
   PoeCurrencyStat,
+  PoeBuildPreview,
+  PoeEquipmentItem,
   PoeLeague,
-  PoeLeagueSyncResult,
-  PoeNinjaImportResult
+  PoeLeagueSyncResult
 } from "@/types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api";
@@ -201,28 +202,48 @@ export const api = {
   exportBackup: () => request<BackupDocument>("/backup/export"),
   importBackup: (payload: { mode: "replace"; backup: BackupDocument }) =>
     request<BackupImportResult>("/backup/import", { method: "POST", body: JSON.stringify(payload) }),
-  listLeagues: () => request<PoeLeague[]>("/poe/leagues"),
+  listLeagues: (signal?: AbortSignal) => request<PoeLeague[]>("/poe/leagues", { signal }),
   createLeague: (payload: Partial<PoeLeague>) =>
     request<PoeLeague>("/poe/leagues", { method: "POST", body: JSON.stringify(payload) }),
+  patchLeague: (id: number, payload: Partial<PoeLeague>) =>
+    request<PoeLeague>(`/poe/leagues/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  deleteLeague: (id: number) => request<void>(`/poe/leagues/${id}`, { method: "DELETE" }),
   syncLeagues: (game_version?: string) =>
     request<PoeLeagueSyncResult>("/poe/leagues/sync", {
       method: "POST",
       body: JSON.stringify({ game_version: game_version || null })
     }),
-  listCharacters: (params: Record<string, QueryValue> = {}) =>
-    request<PoeCharacter[]>(`/poe/characters${qs(params)}`),
-  getCharacter: (id: number) => request<PoeCharacter>(`/poe/characters/${id}`),
+  listCharacters: (params: Record<string, QueryValue> = {}, signal?: AbortSignal) =>
+    request<PoeCharacter[]>(`/poe/characters${qs(params)}`, { signal }),
+  getCharacter: (id: number, signal?: AbortSignal) => request<PoeCharacter>(`/poe/characters/${id}`, { signal }),
   createCharacter: (payload: Partial<PoeCharacter>) =>
     request<PoeCharacter>("/poe/characters", { method: "POST", body: JSON.stringify(payload) }),
   patchCharacter: (id: number, payload: Partial<PoeCharacter>) =>
     request<PoeCharacter>(`/poe/characters/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
   deleteCharacter: (id: number) => request<void>(`/poe/characters/${id}`, { method: "DELETE" }),
-  importFromNinja: (url: string) =>
-    request<PoeNinjaImportResult>("/poe/import-from-ninja", {
+  previewPob: (code: string) =>
+    request<PoeBuildPreview>("/poe/pob/preview", {
       method: "POST",
-      body: JSON.stringify({ url })
+      body: JSON.stringify({ code }),
+      timeoutMs: 30_000
     }),
-  listPoeStats: (characterId: number) => request<PoeCurrencyStat[]>(`/poe/characters/${characterId}/stats`),
+  importPobCharacter: (payload: {
+    name: string;
+    code: string;
+    league_id?: number | null;
+    poe_ninja_url?: string | null;
+    status?: string;
+    playtime_minutes?: number;
+    notes?: string | null;
+  }) => request<PoeCharacter>("/poe/characters/import-pob", {
+    method: "POST",
+    body: JSON.stringify(payload),
+    timeoutMs: 30_000
+  }),
+  listPoeEquipment: (characterId: number, signal?: AbortSignal) =>
+    request<PoeEquipmentItem[]>(`/poe/characters/${characterId}/equipment`, { signal }),
+  listPoeStats: (characterId: number, signal?: AbortSignal) =>
+    request<PoeCurrencyStat[]>(`/poe/characters/${characterId}/stats`, { signal }),
   createPoeStat: (characterId: number, payload: Partial<PoeCurrencyStat>) =>
     request<PoeCurrencyStat>(`/poe/characters/${characterId}/stats`, {
       method: "POST",

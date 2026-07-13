@@ -1,6 +1,7 @@
 from datetime import date
 
 import pytest
+from sqlalchemy import event
 
 from app.core.config import Settings
 from app.integrations.poe_leagues import (
@@ -8,9 +9,8 @@ from app.integrations.poe_leagues import (
     PoeLeagueProvider,
     PoeLeagueProviderConfigurationError,
 )
-from app.integrations.poe_ninja import PoeNinjaService
 from app.models import PoeLeague
-from app.services.poe_league_service import get_or_create_league_by_name, upsert_poe_leagues
+from app.services.poe_league_service import upsert_poe_leagues
 
 
 def test_upsert_poe_leagues_creates_and_updates(db_session):
@@ -45,21 +45,31 @@ def test_upsert_poe_leagues_creates_and_updates(db_session):
     assert existing.start_date == date(2025, 6, 13)
 
 
-def test_get_or_create_league_by_name_reuses_existing(db_session):
-    league = PoeLeague(name="Standard", game_version="poe1", status="active")
-    db_session.add(league)
+def test_upsert_poe_leagues_loads_existing_rows_in_one_query(db_session):
+    db_session.add(PoeLeague(name="Existing", game_version="poe1", status="active"))
     db_session.commit()
+    statements: list[str] = []
 
-    result = get_or_create_league_by_name(db_session, "Standard", "poe1")
+    def capture_select(_, __, statement, ___, ____, _____):
+        if statement.lstrip().upper().startswith("SELECT") and "poe_leagues" in statement:
+            statements.append(statement)
 
-    assert result.id == league.id
-    assert db_session.query(PoeLeague).count() == 1
+    event.listen(db_session.get_bind(), "before_cursor_execute", capture_select)
+    try:
+        upsert_poe_leagues(
+            db_session,
+            [
+                PoeLeagueCandidate("Existing", "poe1", None, None, "active"),
+                PoeLeagueCandidate("New One", "poe1", None, None, "planned"),
+                PoeLeagueCandidate("New Two", "poe2", None, None, "active"),
+                PoeLeagueCandidate("New Two", "poe2", None, None, "active"),
+            ],
+        )
+    finally:
+        event.remove(db_session.get_bind(), "before_cursor_execute", capture_select)
 
-
-def test_poe_ninja_import_extracts_league_from_path():
-    result = PoeNinjaService().import_from_url("https://poe.ninja/builds/mercenaries/character/account/Example")
-
-    assert result.league_name == "Mercenaries"
+    assert len(statements) == 1
+    assert db_session.query(PoeLeague).count() == 3
 
 
 @pytest.mark.anyio
@@ -68,3 +78,41 @@ async def test_poe_league_provider_requires_token():
 
     with pytest.raises(PoeLeagueProviderConfigurationError):
         await provider.fetch("poe1")
+
+
+@pytest.mark.anyio
+async def test_poe_league_provider_reuses_one_client_and_never_calls_real_api(monkeypatch):
+    calls: list[dict] = []
+    instances = 0
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"leagues": [{"id": "Test League", "startAt": "2026-01-01T00:00:00Z"}]}
+
+    class FakeAsyncClient:
+        def __init__(self, **kwargs):
+            nonlocal instances
+            instances += 1
+            assert kwargs["timeout"] == 15
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_):
+            return None
+
+        async def get(self, url, **kwargs):
+            calls.append({"url": url, **kwargs})
+            return FakeResponse()
+
+    monkeypatch.setattr("app.integrations.poe_leagues.httpx.AsyncClient", FakeAsyncClient)
+
+    result = await PoeLeagueProvider(Settings(poe_api_token="secret-token")).fetch()
+
+    assert instances == 1
+    assert [call["params"]["realm"] for call in calls] == ["pc", "poe2"]
+    assert all(call["headers"]["Authorization"] == "Bearer secret-token" for call in calls)
+    assert [item.game_version for item in result] == ["poe1", "poe2"]

@@ -2,6 +2,7 @@ import { CircleDollarSign, Clock3, Gem, ScrollText, Shield, Sparkles, Swords } f
 import type { LucideIcon } from "lucide-react";
 
 import { formatMinutes } from "@/lib/utils";
+import { poeCategoryLabel, poeCharacterStatusLabel } from "@/lib/poe";
 import type { PoeCharacter, PoeCurrencyStat } from "@/types";
 
 export function PoeTooltipCard({ character, stats }: { character: PoeCharacter; stats: PoeCurrencyStat[] }) {
@@ -25,7 +26,7 @@ export function PoeTooltipCard({ character, stats }: { character: PoeCharacter; 
         <Rune icon={Shield} label="Klasa" value={`${character.character_class ?? "-"} ${character.ascendancy ?? ""}`.trim()} />
         <Rune icon={Gem} label="Level" value={String(character.level)} />
         <Rune icon={Clock3} label="Czas" value={formatMinutes(character.playtime_minutes)} />
-        <Rune icon={Swords} label="Status" value={character.status} />
+        <Rune icon={Swords} label="Status" value={poeCharacterStatusLabel(character.status)} />
       </div>
 
       <div className="poe-divider my-4" />
@@ -43,7 +44,7 @@ export function PoeTooltipCard({ character, stats }: { character: PoeCharacter; 
               </div>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm text-[#f4dfb3]">{stat.name}</p>
-                <p className="truncate text-xs text-[#a88655]">{stat.category}</p>
+                <p className="truncate text-xs text-[#a88655]">{poeCategoryLabel(stat.category)}</p>
               </div>
               <span className="font-semibold text-[#ffd37a]">{stat.value}</span>
             </div>

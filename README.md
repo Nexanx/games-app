@@ -1,55 +1,144 @@
 # Games Tracker
 
-Prywatna aplikacja webowa do prowadzenia historii ukończonych gier, osobnej listy „Do ogrania”, postaci Path of Exile 1/2, statystyk dropów oraz chatbota do pytań o zapisane dane.
+Games Tracker to prywatna, jednoosobowa aplikacja webowa do prowadzenia listy „Do ogrania”, historii ukończeń i własnych analiz. Osobny moduł Path of Exile przechowuje ligi, postacie PoE 1/2 oraz ręczne liczniki dropów. Aplikacja zawiera również chatbota odpowiadającego na pytania o zapisane dane.
 
-Nie ma logowania, rejestracji, ról ani systemu kont. Next.js jest wyłącznie frontendem, a cała logika API, integracje, baza i chatbot są w backendzie FastAPI.
+Projekt nie ma własnych kont ani ról. Next.js odpowiada za interfejs, a FastAPI za API, integracje i dostęp do PostgreSQL. Produkcyjny Caddy chroni całą aplikację podstawowym uwierzytelnianiem HTTP; przy wdrożeniu wieloużytkownikowym nadal potrzebny byłby właściwy model kont i autoryzacji.
 
-## Stack
+## Główne funkcje
 
-- Frontend: Next.js, TypeScript, Tailwind CSS, komponenty w stylu shadcn/ui, dnd-kit, react-hook-form, Zod, PWA manifest.
-- Backend: Python, FastAPI, SQLAlchemy 2.0, Pydantic, Alembic, Uvicorn.
-- Baza: PostgreSQL przez Docker Compose.
-- Integracje: RAWG bez danych testowych, konserwatywny importer poe.ninja, chatbot przez OpenAI-compatible API, np. Gemini.
+### Dashboard
 
-## Struktura
+- podsumowanie bieżącego roku: liczba ukończeń, czas gry, średnia ocen i najaktywniejszy miesiąc;
+- ostatnie ukończenia i pierwsze pozycje z kolejki „Do ogrania”;
+- kompaktowy skrót modułu PoE, którego błąd nie blokuje danych o grach;
+- szybkie przejścia do dodania ukończenia, listy, Analizy i PoE;
+- eksport oraz przywracanie kopii danych JSON.
+
+### Do ogrania
+
+- wyszukiwanie w RAWG z paginacją i wyborem wielu wyników;
+- ręczne dodawanie gry, gdy RAWG nie jest potrzebny;
+- wykrywanie duplikatów oraz atomowe dodawanie grupy wyników;
+- własna kolejność drag-and-drop, preferowana platforma, notatka, filtrowanie i sortowanie;
+- lista pozostaje niezależna od historii ukończeń.
+
+### Ukończone gry
+
+- osobna historia dla każdego roku, z rokiem zachowanym w URL;
+- wielokrotne ukończenia tej samej gry jako oddzielne wpisy;
+- data ukończenia, czas, opcjonalna ocena, platforma, recenzja i własne statystyki;
+- kompaktowa nawigacja między latami dostępnymi w bazie;
+- szczegóły, edycja i usuwanie pojedynczego ukończenia.
+
+### Analiza
+
+Analiza działa dla wybranego roku i ma sześć sekcji:
+
+1. **Podsumowanie** — karty roczne, filtry, platformy, gatunki, rankingi i porównanie lat.
+2. **Trendy** — miesięczna liczba ukończeń, czas gry oraz średnia ocena.
+3. **Heatmapa** — aktywność w dniach roku z możliwością przejścia do źródłowych ukończeń.
+4. **Porównanie miesięcy** — proste porównanie dwóch miesięcy tego samego roku.
+5. **Prognozy** — deterministyczna prognoza liczby ukończeń albo czasu na podstawie zapisanej historii.
+6. **Raport roczny** — tekstowe podsumowanie, wykresy i widok przygotowany do wydruku.
+
+Brak oceny nie jest liczony jako zero. API wypełnia miesiące bez ukończeń wartościami zerowymi tam, gdzie jest to potrzebne do pokazania pełnego trendu.
+
+### Chatbot
+
+- korzysta z dostawcy zgodnego z API OpenAI, np. zgodnego endpointu Gemini;
+- otrzymuje ograniczony, tekstowy kontekst z lokalnych gier, ukończeń, listy „Do ogrania” i PoE;
+- zapisuje sesje rozmów w bazie;
+- ma endpoint statusu oraz kontrolowane komunikaty dla braku konfiguracji, timeoutu, limitu i awarii dostawcy;
+- nie wykonuje SQL wygenerowanego przez model i nie zwraca kluczy API ani surowych odpowiedzi dostawcy.
+
+## Path of Exile
+
+Moduł PoE jest prywatnym rejestrem postaci i własnych statystyk, a nie pełnym planerem buildów.
+
+Aktualnie działają:
+
+- ręczne tworzenie, edycja i usuwanie lig PoE 1 i PoE 2 z datami, statusem i notatką; usunięcie ligi nie kasuje postaci ani dropów;
+- opcjonalna synchronizacja lig z oficjalnego endpointu Path of Exile `GET /league`;
+- zapis końcowego stanu postaci z ligi przez wklejenie kodu PoB skopiowanego z profilu poe.ninja;
+- bezpieczny, lokalny odczyt wersji gry, klasy, ascendancy, poziomu i aktualnie założonych przedmiotów bez wysyłania kodu do zewnętrznej usługi;
+- ręczne tworzenie starszych lub nietypowych wpisów bez kodu PoB;
+- filtrowanie postaci po wersji gry, lidze i statusie, wyszukiwanie po nazwie oraz sortowanie;
+- szczegóły, edycja i usuwanie postaci;
+- responsywny widok końcowego wyposażenia z podglądem pełnych statystyk po najechaniu, ustawieniu fokusu klawiaturą lub dotknięciu przedmiotu;
+- linki do profilu oraz źródłowego widoku poe.ninja;
+- ręcznie wpisywane i edytowane statystyki dropów z Ring MTX, np. waluty, mapy, fragmenty, skarabeusze, karty i unikaty, wraz z kolejnością, ikoną i notatką;
+- eksport i import danych PoE w kopii JSON;
+- kompaktowe podsumowanie PoE na Dashboardzie.
+
+poe.ninja nie udostępnia wspieranego publicznego API profili i buildów do integracji zewnętrznych. Aplikacja nie scrapuje strony ani nie korzysta z jej wewnętrznych endpointów. Na stronie postaci wybierz **Copy PoB code**, wklej kod w Games Tracker, sprawdź podgląd, a następnie uzupełnij nick oraz ligę. Nick jest wpisywany ręcznie, ponieważ format PoB nie gwarantuje jego obecności. Surowy kod PoB nie jest zapisywany w bazie.
+
+Import obejmuje tylko aktywny zestaw wyposażenia: broń, pancerz, biżuterię, flaski oraz charmy, jeśli występują w danej wersji gry. Drzewko pasywów, atlas, gemy, przedmioty zapasowe, budżet i historia zmian builda są celowo pomijane. Projekt nie jest zamiennikiem Path of Building ani pełnym planerem buildu.
+
+Kod PoB nie zawiera adresów ani stabilnych identyfikatorów grafik przedmiotów. Dlatego widok używa czytelnych ikon slotów i lokalnego tooltipu zamiast zgadywać grafiki lub wykonywać niewspierane zapytania do wewnętrznych endpointów poe.ninja.
+
+### Integracja z ligami PoE
+
+Automatyczna synchronizacja wymaga tokenu `POE_API_TOKEN` ze scope `service:leagues`. Synchronizacja jest uruchamiana ręcznie z interfejsu, korzysta z realmów `pc` i `poe2`, ma limit 15 sekund na request oraz zwraca kontrolowany błąd przy braku konfiguracji lub awarii API. Ręczne ligi działają bez tokenu.
+
+## Stos technologiczny
+
+Wersje zadeklarowane w plikach projektu i rozstrzygnięte przez lockfile:
+
+| Obszar | Technologie |
+| --- | --- |
+| Frontend | Next.js `16.2.10`, React/React DOM `19.2.7`, TypeScript `6.0.3`, Tailwind CSS `3.4.19` |
+| UI i formularze | Lucide React 1, react-hook-form 7.81, Zod 4.4, komponenty lokalne inspirowane shadcn/ui |
+| Dane i wykresy | Recharts 3.9, dnd-kit core 6 / sortable 10 |
+| Backend | Python 3.14 w obrazie Docker, FastAPI `>=0.139.0`, SQLAlchemy `>=2.0.51`, Pydantic 2.13, Alembic, Uvicorn 0.51 |
+| Baza i wdrożenie | PostgreSQL 16, Docker Compose, Caddy |
+| Integracje | RAWG, oficjalne API lig Path of Exile, lokalny parser kodu Path of Building, OpenAI-compatible LLM API |
+| Testy | pytest 9, Vitest 4.1, ESLint 9.39 i TypeScript 6.0 |
+
+Zależności PoE nie tworzą osobnego stosu: formularz postaci korzysta z tego samego react-hook-form/Zod, a UI z tych samych komponentów i Tailwinda co reszta aplikacji.
+
+## Struktura projektu
 
 ```text
 frontend/
-  app/
-  components/
-  lib/
-  services/
-  styles/
+  app/                 # routing App Router
+  components/          # UI, gry, Analiza, PoE, chatbot i layout
+  lib/                 # funkcje widoków i formatowanie
+  services/api.ts      # klient FastAPI, timeouty i obsługa błędów
+  tests/
   types/
 backend/
   app/
-    api/
-    core/
+    api/               # routery FastAPI
+    chatbot/
+    core/              # konfiguracja
+    database/
+    integrations/      # RAWG, ligi PoE i parser kodu PoB
     models/
     schemas/
     services/
-    database/
-    integrations/
-    chatbot/
   alembic/
   tests/
-docker-compose.yml
-Makefile
-.env.example
+scripts/               # start, backup i restore PostgreSQL
+docker-compose.yml     # lokalny PostgreSQL
+docker-compose.prod.yml
 ```
 
 ## Wymagania
 
-- Python 3.11+
-- Node.js 20+
-- Docker Desktop
-- opcjonalnie `make`
+- Python 3.11 lub nowszy; obraz Docker korzysta z Pythona 3.14;
+- Node.js 24 LTS;
+- Docker Desktop do lokalnego PostgreSQL i Compose;
+- opcjonalnie `make`.
 
-## Konfiguracja
+## Konfiguracja lokalna
 
-Skopiuj `.env.example` do `.env` w katalogu głównym oraz do `backend/.env` i `frontend/.env.local`, jeśli uruchamiasz procesy z ich podkatalogów.
+Skopiuj wzór do rootowego `.env`:
 
-Minimalne wartości:
+```powershell
+Copy-Item .env.example .env
+```
+
+Minimalna konfiguracja:
 
 ```env
 DATABASE_URL=postgresql+psycopg://games:games@localhost:5433/games_app
@@ -57,62 +146,62 @@ FRONTEND_URL=http://localhost:3000
 NEXT_PUBLIC_API_URL=http://localhost:8000/api
 ```
 
-`RAWG_API_KEY` jest wymagany do wyszukiwania gier. `OPENAI_API_KEY` i `OPENAI_MODEL` są wymagane do odpowiedzi chatbota. Brak konfiguracji RAWG albo błąd dostawcy zwraca jawny kod 503/502 zamiast używać mocków. Frontend sprawdza `GET /api/chat/status` i wyświetla czytelny komunikat, gdy chatbot nie jest gotowy.
-
-Przy ręcznym dodawaniu gry możesz wpisać sam tytuł. Jeśli `cover_url` jest puste, backend spróbuje pobrać okładkę i brakujące metadane z RAWG. Gdy RAWG nie jest skonfigurowany albo nie zwróci okładki, API zwróci jawny błąd zamiast zapisać rekord z danymi zastępczymi.
-
-Backend ładuje konfigurację z rootowego `.env.production`, rootowego `.env` oraz `backend/.env`. Po zmianie kluczy API zrestartuj lokalny `uvicorn` albo odtwórz kontener backendu, żeby proces dostał nowe zmienne.
-
-`POE_API_TOKEN` jest opcjonalny, ale wymagany do automatycznej synchronizacji lig z oficjalnego API Path of Exile. Token musi mieć scope `service:leagues`. Import postaci z poe.ninja może utworzyć brakującą ligę automatycznie z samego linku, jeśli link zawiera nazwę ligi.
-
-Gemini działa przez OpenAI-compatible endpoint:
+Opcjonalne integracje:
 
 ```env
-OPENAI_API_KEY=twoj_klucz_gemini
+RAWG_API_KEY=
+POE_API_TOKEN=
+OPENAI_API_KEY=
 OPENAI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
 OPENAI_MODEL=gemini-3.5-flash
-```
-
-Limit oczekiwania na odpowiedź modelu ustawisz bez zapisywania go w kodzie:
-
-```env
 LLM_REQUEST_TIMEOUT_SECONDS=60
 ```
 
-Wartość musi być dodatnia (maksymalnie `120` sekund). Frontend czeka na odpowiedź chatbota do `75` sekund, czyli dłużej niż domyślny limit backendu, aby backend zdążył zwrócić kontrolowany błąd dostawcy. `POST /api/chat` zwraca bezpieczne szczegóły błędu w polu `detail`: kod, komunikat dla użytkownika i `error_id`, który można odnaleźć w logach backendu. Obsługiwane kody to `llm_not_configured`, `llm_auth_error`, `llm_timeout`, `llm_rate_limited`, `llm_provider_unavailable`, `llm_network_error`, `llm_invalid_response` oraz `llm_internal_error`. Odpowiedzi i logi nie zawierają kluczy API, nagłówków uwierzytelniających ani surowych odpowiedzi dostawcy.
+- `RAWG_API_KEY` włącza wyszukiwanie i uzupełnianie okładek/metadanych.
+- `POE_API_TOKEN` jest potrzebny wyłącznie do synchronizacji lig.
+- `OPENAI_API_KEY`, `OPENAI_BASE_URL` i `OPENAI_MODEL` włączają chatbota.
+- `LLM_REQUEST_TIMEOUT_SECONDS` musi mieścić się w zakresie `(0, 120]`; frontend czeka 75 sekund, aby backend zdążył zwrócić kontrolowany timeout.
+
+Backend czyta kolejno rootowe `.env.production`, rootowe `.env` i `backend/.env`. Przy ręcznym uruchamianiu frontendu utwórz `frontend/.env.local`:
+
+```env
+NEXT_PUBLIC_API_URL=http://localhost:8000/api
+```
+
+Po zmianie zmiennych zrestartuj odpowiedni proces lub kontener. Pliki z rzeczywistymi sekretami nie powinny trafiać do repozytorium.
 
 ## Uruchomienie
 
-Najprościej uruchomić całą aplikację jednym skryptem PowerShell z katalogu głównego projektu:
+Najprostsza ścieżka na Windows:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\start_app.ps1
 ```
 
-Skrypt sprawdza wymagane narzędzia, przygotowuje brakujące pliki konfiguracyjne, instaluje zależności, uruchamia PostgreSQL, wykonuje migracje i seed, a następnie uruchamia backend oraz frontend w jednym terminalu. `Ctrl+C` zatrzymuje oba procesy aplikacji (kontener bazy pozostaje uruchomiony).
+Skrypt sprawdza Python/Node/Docker, przygotowuje brakujące pliki środowiskowe, instaluje zależności, uruchamia PostgreSQL, wykonuje migracje i neutralny seed, a następnie uruchamia backend oraz frontend w jednym terminalu.
 
-Przy kolejnych uruchomieniach można pominąć ponowną instalację zależności:
+Kolejne uruchomienie bez instalacji:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\start_app.ps1 -SkipInstall
 ```
 
-Jeśli po poprzednim uruchomieniu porty `3000` albo `8000` nadal są zajęte, można zatrzymać stare procesy tej aplikacji podczas startu:
+Zatrzymanie starych procesów tej aplikacji na portach 3000/8000 podczas startu:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\start_app.ps1 -SkipInstall -StopExisting
 ```
 
-Odpowiednik wykonywany ręcznie:
+### Uruchomienie ręczne
 
 ```powershell
 docker compose up -d postgres
 cd backend
 python -m venv .venv
-.\.venv\Scripts\python -m pip install -r requirements.txt
-.\.venv\Scripts\alembic upgrade head
-.\.venv\Scripts\python -m app.database.seed
-.\.venv\Scripts\uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m alembic upgrade head
+.\.venv\Scripts\python.exe -m app.database.seed
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 W drugim terminalu:
@@ -123,185 +212,102 @@ npm install
 npm run dev
 ```
 
-Aplikacja:
+- Frontend: <http://localhost:3000>
+- Backend: <http://localhost:8000>
+- OpenAPI: <http://localhost:8000/docs>
+- Health check: <http://localhost:8000/health>
 
-- Frontend: http://localhost:3000
-- Backend: http://localhost:8000
-- OpenAPI: http://localhost:8000/docs
+## Migracje i dane
 
-## Migracje
-
-Skrypt `start_app.ps1` wykonuje `alembic upgrade head` przed uruchomieniem serwerów. Przy ręcznym starcie wykonaj tę samą komendę z katalogu `backend` po uruchomieniu PostgreSQL:
-
-```powershell
-.\.venv\Scripts\alembic upgrade head
-```
-
-Aktualna migracja dodaje indeks znormalizowanej pary źródło/identyfikator zewnętrzny gry, wykorzystywany przez deduplikację RAWG. Migracje nie usuwają istniejących wpisów użytkownika.
-
-## Komendy Makefile
+Migracje uruchamiaj z katalogu `backend`:
 
 ```powershell
-make db-up
-make backend-install
-make backend-migrate
-make backend-seed
-make backend-clear-sample-data
-make backend-dev
-make frontend-install
-make frontend-dev
+.\.venv\Scripts\python.exe -m alembic upgrade head
 ```
 
-## Kopia danych JSON
+Rewizje tworzą pierwotny model, bezpiecznie rozdzielają backlog od powtarzalnych ukończeń i dodają indeksy używane przez deduplikację RAWG, kolejność backlogu, historię chatbota oraz listy lig/postaci/statystyk PoE. Migracje PoE dodają niedestrukcyjnie źródło snapshotu i tabelę `poe_equipment_items`. Unikalność nazwy ligi obowiązuje w obrębie wersji gry; migracja zatrzyma się bez zmiany danych, jeśli wcześniej zapisano duplikaty wymagające ręcznego rozstrzygnięcia.
 
-Na pulpicie głównym znajduje się karta **Kopia zapasowa**. Przycisk **Pobierz kopię JSON** zapisuje pojedynczy plik w formacie `format_version: 1`, zawierający lokalne gry, listę „Do ogrania”, ukończone wpisy i własne statystyki, dane Path of Exile oraz historię rozmów. Eksport nie obejmuje kluczy API, tokenów, sekretów ani wartości z plików `.env`.
-
-Przywracanie działa wyłącznie w trybie `replace`:
-
-1. wybierz wcześniej wyeksportowany plik JSON;
-2. potwierdź ostrzeżenie o zastąpieniu danych;
-3. aplikacja sprawdzi wersję formatu, wymagane pola i relacje między rekordami;
-4. dopiero wtedy zastąpi dane w jednej transakcji i odświeży widok.
-
-Nie ma trybu łączenia danych. Uszkodzony albo nieobsługiwany plik nie zmienia bazy; błąd importu także wycofuje całą operację. Dla automatyzacji dostępne są `GET /api/backup/export` oraz `POST /api/backup/import` z treścią:
-
-```json
-{
-  "mode": "replace",
-  "backup": {
-    "format_version": 1,
-    "exported_at": "2026-07-10T20:00:00Z",
-    "app_name": "Games Tracker",
-    "data": {}
-  }
-}
-```
-
-## Tryb produkcyjny
-
-Projekt zawiera produkcyjny Compose:
-
-- `backend/Dockerfile` dla FastAPI,
-- `frontend/Dockerfile` dla Next.js,
-- `docker-compose.prod.yml` z PostgreSQL, backendem, frontendem i Caddy,
-- `Caddyfile` jako reverse proxy pod jedną domeną,
-- `.env.production.example` jako wzór konfiguracji,
-- skrypty backup/restore bazy w `scripts/`.
-
-Przykład lokalny:
+Seed nie dodaje przykładowych gier ani danych PoE:
 
 ```powershell
-Copy-Item .env.production.example .env.production
-docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build
+.\.venv\Scripts\python.exe -m app.database.seed
 ```
 
-Na VPS ustaw w `.env.production`:
+## Kopie danych
 
-```env
-APP_DOMAIN=games.twojadomena.pl
-PUBLIC_APP_URL=https://games.twojadomena.pl
-POSTGRES_PASSWORD=dlugie-losowe-haslo
-```
+Karta **Kopia zapasowa** na Dashboardzie eksportuje jeden plik JSON (`format_version: 2`) zawierający gry, backlog, ukończenia, własne statystyki, ligi, snapshoty postaci, wyposażenie, statystyki PoE i historię rozmów. Import pozostaje zgodny ze starszym formatem `1`; brakujące źródło snapshotu jest wtedy traktowane jako wpis ręczny. Sekrety, wartości `.env` i surowe kody PoB nie są eksportowane.
 
-Caddy automatycznie obsłuży HTTPS dla prawdziwej domeny wskazującej na serwer. Frontend używa wtedy `/api`, więc telefon widzi jedną aplikację pod jednym adresem.
+Import działa wyłącznie w trybie `replace`. Backend najpierw waliduje cały dokument i relacje, a następnie zastępuje dane w jednej transakcji. Nieprawidłowy plik lub błąd zapisu wycofuje operację. Nie ma trybu scalania.
 
-Backup bazy:
+Do pełnej kopii PostgreSQL służą:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/backup_database.ps1
-```
-
-Restore bazy:
-
-```powershell
 powershell -ExecutionPolicy Bypass -File scripts/restore_database.ps1 -BackupPath backups/games-app-YYYYMMDD-HHMMSS.sql
 ```
 
-Przywracanie nadpisuje dane w bazie, więc uruchamiaj je tylko świadomie.
+Restore bazy zastępuje dane i powinien być wykonywany świadomie.
 
-## PWA
+## Tryb produkcyjny i PWA
 
-Aplikacja ma manifest, service worker i stronę offline. W produkcji po HTTPS można ją dodać do ekranu głównego telefonu.
-
-- Android/Chrome: przycisk instalacji w menu przeglądarki, jeżeli aplikacja spełnia wymagania PWA.
-- iPhone/Safari: `Udostępnij` -> `Do ekranu początkowego`.
-
-Service worker cache'uje shell aplikacji i zasoby statyczne. Endpointy `/api` są zawsze pobierane z sieci, żeby nie pokazywać nieaktualnych danych.
-
-## Troubleshooting
-
-### `DATABASE_UNAVAILABLE` albo błąd hasła PostgreSQL
-
-Jeśli backend pokazuje błąd podobny do `password authentication failed for user "games"`, to `DATABASE_URL` nie pasuje do hasła zapisanej bazy PostgreSQL albo backend trafia w inną lokalną instancję PostgreSQL. Najczęstsze przyczyny:
-
-- kontener PostgreSQL używa starego wolumenu utworzonego z innym `POSTGRES_PASSWORD`,
-- `backend/.env` ma inne hasło niż `docker-compose.yml` albo `.env.production`,
-- lokalnie działa inny PostgreSQL na porcie `5432`.
-
-Devowy `docker-compose.yml` wystawia PostgreSQL na porcie hosta `5433`, żeby ominąć typowy konflikt z lokalnym Postgresem na Windowsie:
-
-```env
-DATABASE_URL=postgresql+psycopg://games:games@localhost:5433/games_app
-```
-
-Po zmianie portu odtwórz kontener bez usuwania wolumenu:
+Projekt zawiera Dockerfile dla backendu i frontendu, PostgreSQL 16, Caddy, wzór `.env.production.example` oraz produkcyjny Compose:
 
 ```powershell
-docker compose up -d --force-recreate postgres
+Copy-Item .env.production.example .env.production
+docker run --rm caddy:2-alpine caddy hash-password --plaintext "ustaw-silne-haslo"
+docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build
 ```
 
-Rozwiązanie bez kasowania danych: ustaw `DATABASE_URL` dokładnie pod istniejące hasło i port bazy. Rozwiązanie tylko dla pustej/dev bazy: zatrzymaj kontener i usuń wolumen PostgreSQL, a potem utwórz bazę od nowa.
+W `.env.production` ustaw co najmniej silne `POSTGRES_PASSWORD`, `APP_DOMAIN`, `PUBLIC_APP_URL`, `APP_BASIC_AUTH_USERNAME` i wynik powyższego polecenia jako `APP_BASIC_AUTH_PASSWORD_HASH`. Hash bcrypt zawiera znaki `$`, dlatego najbezpieczniej zapisać całą wartość w pojedynczym cudzysłowie, np. `APP_BASIC_AUTH_PASSWORD_HASH='$2a$...'`.
 
-## Seed danych
+Caddy wymaga uwierzytelnienia dla interfejsu i `/api`; publiczny pozostaje wyłącznie `/health`, potrzebny do kontroli dostępności. To ochrona odpowiednia dla prywatnego, jednoosobowego wdrożenia, ale nie zastępuje autoryzacji rekordów w aplikacji wieloużytkownikowej.
 
-Seed nie dodaje przykładowych gier, postaci ani statystyk PoE. Obecnie jest neutralnym krokiem startowym, który można bezpiecznie uruchamiać po migracjach.
-
-```powershell
-cd backend
-.\.venv\Scripts\python -m app.database.seed
-```
-
-Jeśli masz lokalną bazę utworzoną starszą wersją projektu, możesz usunąć dawne przykładowe rekordy seedowe:
-
-```powershell
-cd backend
-.\.venv\Scripts\python -m app.database.clear_sample_data
-```
+Manifest, service worker i strona offline pozwalają zainstalować aplikację jako PWA. Service worker cache'uje shell i statyczne zasoby; `/api` pozostaje network-only, aby nie prezentować starych danych.
 
 ## Najważniejsze endpointy
 
-### Gry RAWG i lista „Do ogrania”
+### Gry i backlog
 
-- `GET /api/games/search?query=Hades&page=1&page_size=10` zwraca `{ results, page, page_size, has_next }`. Wyniki aktywnego backlogu są odfiltrowane po parze `external_source` + `external_id`; dla ręcznych gier bez identyfikatora używany jest znormalizowany tytuł. Paginacja pozostaje logiczna po filtrowaniu, dlatego klient korzysta z `has_next`.
-- `GET/POST /api/games`, `GET/PATCH/DELETE /api/games/{id}`.
-- `GET /api/backlog`, `POST /api/backlog`, `PATCH/DELETE /api/backlog/{id}` oraz `POST /api/backlog/reorder`.
-- `POST /api/backlog/batch` przyjmuje `{ "games": [/* wyniki RAWG */] }` i atomowo dodaje maksymalnie 50 zaznaczonych pozycji. Odpowiedź ma pola `added`, `already_exists` i `failed`; duplikaty są raportowane w `already_exists`, a konflikt zapisu wycofuje całą grupę.
+- `GET /api/games/search?query=Hades&page=1&page_size=10`
+- `GET/POST /api/games`, `GET/PATCH/DELETE /api/games/{id}`
+- `GET/POST /api/backlog`, `GET/PATCH/DELETE /api/backlog/{id}`
+- `POST /api/backlog/batch`, `POST /api/backlog/reorder`
 
-### Ukończone gry i podsumowania
+### Ukończenia i Analiza
 
-- `GET /api/completed-games/years` zwraca dostępne lata oraz liczbę wpisów.
-- `GET /api/completed-games?year=2026` pobiera tylko wskazany rok. Opcjonalne parametry: `month`, wielokrotne `platform` i `genre`, a także `rating_min` oraz `rating_max`; przykładowo `?year=2026&platform=PC&genre=RPG&rating_min=8`.
-- `GET /api/completed-games/year/2026/dashboard` zwraca roczne agregaty: liczbę gier, czas, oceny, najdłuższą/najlepiej ocenioną grę oraz podsumowanie miesięczne i dostępne opcje filtrów.
-- `GET /api/completed-games/comparison?years=2025,2026` zwraca porównanie od 2 do 8 różnych lat, również w podziale na miesiące.
-- `GET/POST /api/completed-games`, `GET/PATCH/DELETE /api/completed-games/{id}`.
-- `GET/POST /api/completed-games/{id}/statistics` oraz `PATCH/DELETE /api/completed-games/statistics/{id}`.
+- `GET /api/completed-games/years`
+- `GET/POST /api/completed-games`, `GET/PATCH/DELETE /api/completed-games/{id}`
+- `GET /api/completed-games/year/{year}/dashboard`
+- `GET /api/completed-games/year/{year}/activity`
+- `GET /api/completed-games/year/{year}/report`
+- `GET /api/completed-games/comparison?years=2025,2026`
+- `GET /api/completed-games/month-comparison`
+- `GET /api/completed-games/forecast`
+- `GET/POST /api/completed-games/{id}/statistics`
+- `GET/PATCH/DELETE /api/completed-games/statistics/{id}`
 
-### Kopie, dashboard, PoE i chatbot
+### PoE, kopie, Dashboard i chatbot
 
+- `GET/POST /api/poe/leagues`, `PATCH/DELETE /api/poe/leagues/{id}`
+- `POST /api/poe/leagues/sync`
+- `GET/POST /api/poe/characters`, `GET/PATCH/DELETE /api/poe/characters/{id}`
+- `POST /api/poe/pob/preview`, `POST /api/poe/characters/import-pob`
+- `GET /api/poe/characters/{id}/equipment`
+- `GET/POST /api/poe/characters/{id}/stats`, `POST /api/poe/characters/{id}/stats/reorder`
+- `PATCH/DELETE /api/poe/stats/{id}`
 - `GET /api/dashboard/summary`
 - `GET /api/backup/export`, `POST /api/backup/import`
-- `GET/POST/PATCH/DELETE /api/poe/leagues`, `POST /api/poe/leagues/sync`
-- `GET/POST/PATCH/DELETE /api/poe/characters`, `POST /api/poe/import-from-ninja`
-- `GET/POST /api/poe/characters/{id}/stats`, `PATCH/DELETE /api/poe/stats/{id}`, `POST /api/poe/characters/{id}/stats/reorder`
-- `POST /api/chat`, `GET /api/chat/status`, `GET /api/chat/sessions`
+- `POST /api/chat`, `GET /api/chat/status`, `GET /api/chat/sessions`, `GET/DELETE /api/chat/sessions/{id}`
 
-## Testy
+Pełny, aktualny kontrakt jest dostępny w OpenAPI pod `/docs`.
+
+## Testy i kontrola jakości
 
 Backend:
 
 ```powershell
 cd backend
-.\.venv\Scripts\pytest
+.\.venv\Scripts\python.exe -m pytest
 ```
 
 Frontend:
@@ -314,6 +320,60 @@ npm run typecheck
 npm run build
 ```
 
+Projekt nie ma obecnie osobno skonfigurowanego lintera ani statycznego type checkera dla Pythona; nie należy przedstawiać takiej kontroli jako istniejącej komendy.
+
+Audyt podatności produkcyjnych zależności npm:
+
+```powershell
+cd frontend
+npm audit --omit=dev
+```
+
+## Rozwiązywanie problemów
+
+### PostgreSQL lub `DATABASE_UNAVAILABLE`
+
+Lokalny Compose wystawia bazę na porcie `5433`. Sprawdź, czy `DATABASE_URL` odpowiada portowi, użytkownikowi i hasłu istniejącego wolumenu. Odtworzenie kontenera bez kasowania danych:
+
+```powershell
+docker compose up -d --force-recreate postgres
+```
+
+Nie usuwaj wolumenu, jeśli zawiera dane użytkownika.
+
+### RAWG nie wyszukuje albo nie pobiera okładki
+
+Uzupełnij `RAWG_API_KEY` i zrestartuj backend. Brak konfiguracji zwraca 503, a awaria dostawcy 502; aplikacja nie podstawia fikcyjnych wyników.
+
+### Synchronizacja lig PoE nie działa
+
+- upewnij się, że `POE_API_TOKEN` ma scope `service:leagues`;
+- zrestartuj backend po zmianie tokenu;
+- ręczne tworzenie i odczyt istniejących lig nie wymagają tokenu;
+- timeout lub błąd oficjalnego API nie usuwa ani nie nadpisuje lokalnych rekordów poza udaną synchronizacją.
+
+### Kod PoB z poe.ninja nie daje się odczytać
+
+- skopiuj pełną wartość z przycisku **Copy PoB code** na profilu postaci, bez adresu strony ani dodatkowego tekstu;
+- obsługiwany jest skompresowany kod PoB oraz surowy XML PoB 1/2;
+- snapshot musi zawierać sekcję postaci i co najmniej jeden założony przedmiot;
+- limit wejścia wynosi 2 MB, a rozpakowanego XML 3 MB;
+- nick oraz liga pozostają polami ręcznymi, bo nie są niezawodną częścią formatu PoB;
+- aplikacja nie pobiera profilu poe.ninja i nie zależy od jego wewnętrznego API.
+
+### Chatbot jest niedostępny lub zwraca timeout
+
+Sprawdź `GET /api/chat/status`, klucz, base URL i nazwę modelu. Backend rozróżnia brak konfiguracji, błąd autoryzacji, timeout, rate limit, niedostępność dostawcy, błąd sieci i nieprawidłową odpowiedź. W logu odszukaj `error_id`; interfejs celowo nie pokazuje surowej odpowiedzi dostawcy.
+
+### Frontend nie łączy się z API
+
+Sprawdź `NEXT_PUBLIC_API_URL` oraz `FRONTEND_URL`. Dla lokalnych procesów typowa wartość to `http://localhost:8000/api`; w produkcyjnym Compose frontend używa `/api` przez Caddy.
+
 ## Bezpieczeństwo i prywatność
 
-Aplikacja jest jednoosobowa i prywatna. Mimo braku logowania backend waliduje wejście przez Pydantic, chatbot nie wykonuje raw SQL z prompta, a klucze API są czytane wyłącznie ze środowiska.
+- sekrety są czytane ze środowiska i nie trafiają do eksportu JSON;
+- backend nie zwraca stack trace ani surowych odpowiedzi integracji;
+- URL-e profilu muszą używać HTTP/HTTPS, a link źródłowy poe.ninja wyłącznie właściwej domeny;
+- parser PoB ogranicza rozmiar danych, odrzuca deklaracje DTD/ENTITY i nie przechowuje surowego kodu;
+- CORS ogranicza frontend do skonfigurowanego originu i lokalnych adresów developerskich;
+- produkcyjny reverse proxy chroni aplikację podstawowym uwierzytelnianiem; lokalne uruchomienie developerskie pozostaje bez logowania.

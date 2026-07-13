@@ -13,19 +13,8 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/services/api";
+import { POE_STAT_CATEGORIES } from "@/lib/poe";
 import type { PoeCurrencyStat } from "@/types";
-
-const categories = [
-  "currency",
-  "maps",
-  "fragments",
-  "scarabs",
-  "crafting",
-  "league mechanic",
-  "cards",
-  "uniques",
-  "custom"
-];
 
 export function PoeCurrencyGrid({
   characterId,
@@ -34,7 +23,7 @@ export function PoeCurrencyGrid({
 }: {
   characterId: number;
   stats: PoeCurrencyStat[];
-  onChanged: (stats?: PoeCurrencyStat[]) => void;
+  onChanged: (stats: PoeCurrencyStat[]) => void;
 }) {
   const [form, setForm] = useState({ name: "", value: "0", category: "currency", icon_url: "", notes: "" });
   const [message, setMessage] = useState<string | null>(null);
@@ -45,7 +34,7 @@ export function PoeCurrencyGrid({
     }
     setMessage(null);
     try {
-      await api.createPoeStat(characterId, {
+      const created = await api.createPoeStat(characterId, {
         name: form.name,
         value: Number(form.value || 0),
         category: form.category,
@@ -54,7 +43,7 @@ export function PoeCurrencyGrid({
         notes: form.notes || null
       });
       setForm({ name: "", value: "0", category: "currency", icon_url: "", notes: "" });
-      onChanged();
+      onChanged([...stats, created]);
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Nie udało się dodać statystyki");
     }
@@ -68,7 +57,11 @@ export function PoeCurrencyGrid({
     const next = [...stats];
     const [item] = next.splice(index, 1);
     next.splice(target, 0, item);
-    onChanged(await api.reorderPoeStats(characterId, next.map((stat) => stat.id)));
+    try {
+      onChanged(await api.reorderPoeStats(characterId, next.map((stat) => stat.id)));
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Nie udało się zmienić kolejności statystyk");
+    }
   }
 
   return (
@@ -80,25 +73,25 @@ export function PoeCurrencyGrid({
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="grid gap-3 sm:grid-cols-[1fr_120px_180px]">
-            <Field label="Nazwa">
-              <Input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="Divine Orb" />
+            <Field label="Nazwa" htmlFor="poe-stat-name">
+              <Input id="poe-stat-name" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="Divine Orb" />
             </Field>
-            <Field label="Wartość">
-              <Input type="number" value={form.value} onChange={(event) => setForm({ ...form, value: event.target.value })} />
+            <Field label="Wartość" htmlFor="poe-stat-value">
+              <Input id="poe-stat-value" type="number" value={form.value} onChange={(event) => setForm({ ...form, value: event.target.value })} />
             </Field>
-            <Field label="Kategoria">
-              <Select value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value })}>
-                {categories.map((category) => (
-                  <option key={category} value={category}>{category}</option>
+            <Field label="Kategoria" htmlFor="poe-stat-category">
+              <Select id="poe-stat-category" value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value })}>
+                {POE_STAT_CATEGORIES.map((category) => (
+                  <option key={category.value} value={category.value}>{category.label}</option>
                 ))}
               </Select>
             </Field>
           </div>
-          <Field label="Ikona URL">
-            <Input value={form.icon_url} onChange={(event) => setForm({ ...form, icon_url: event.target.value })} placeholder="https://..." />
+          <Field label="Ikona URL" htmlFor="poe-stat-icon">
+            <Input id="poe-stat-icon" type="url" value={form.icon_url} onChange={(event) => setForm({ ...form, icon_url: event.target.value })} placeholder="https://..." />
           </Field>
-          <Field label="Notatka">
-            <Textarea value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} />
+          <Field label="Notatka" htmlFor="poe-stat-notes">
+            <Textarea id="poe-stat-notes" value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} />
           </Field>
           {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}
           <Button onClick={addStat} className="w-full sm:w-auto">
@@ -116,9 +109,20 @@ export function PoeCurrencyGrid({
               stat={stat}
               onMoveUp={() => move(index, -1)}
               onMoveDown={() => move(index, 1)}
+              canMoveUp={index > 0}
+              canMoveDown={index < stats.length - 1}
+              onUpdate={async (payload) => {
+                const updated = await api.patchPoeStat(stat.id, payload);
+                onChanged(stats.map((item) => item.id === stat.id ? updated : item));
+              }}
               onDelete={async () => {
-                await api.deletePoeStat(stat.id);
-                onChanged();
+                if (!window.confirm(`Usunąć statystykę „${stat.name}”?`)) return;
+                try {
+                  await api.deletePoeStat(stat.id);
+                  onChanged(stats.filter((item) => item.id !== stat.id));
+                } catch (err) {
+                  setMessage(err instanceof Error ? err.message : "Nie udało się usunąć statystyki");
+                }
               }}
             />
           ))}
@@ -130,10 +134,10 @@ export function PoeCurrencyGrid({
   );
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
+function Field({ label, htmlFor, children }: { label: string; htmlFor: string; children: ReactNode }) {
   return (
     <div className="space-y-1.5">
-      <Label>{label}</Label>
+      <Label htmlFor={htmlFor}>{label}</Label>
       {children}
     </div>
   );

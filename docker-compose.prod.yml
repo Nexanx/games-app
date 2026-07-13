@@ -22,8 +22,6 @@ services:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-games}:${POSTGRES_PASSWORD:-games}@postgres:5432/${POSTGRES_DB:-games_app}
       FRONTEND_URL: ${PUBLIC_APP_URL:-http://localhost}
       RAWG_API_KEY: ${RAWG_API_KEY:-}
-      IGDB_CLIENT_ID: ${IGDB_CLIENT_ID:-}
-      IGDB_CLIENT_SECRET: ${IGDB_CLIENT_SECRET:-}
       POE_API_TOKEN: ${POE_API_TOKEN:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://generativelanguage.googleapis.com/v1beta/openai/}
@@ -49,6 +47,8 @@ services:
     restart: unless-stopped
     environment:
       APP_DOMAIN: ${APP_DOMAIN:-localhost}
+      APP_BASIC_AUTH_USERNAME: ${APP_BASIC_AUTH_USERNAME:?Set APP_BASIC_AUTH_USERNAME in .env.production}
+      APP_BASIC_AUTH_PASSWORD_HASH: ${APP_BASIC_AUTH_PASSWORD_HASH:?Set APP_BASIC_AUTH_PASSWORD_HASH in .env.production}
     ports:
       - "${HTTP_PORT:-80}:80"
       - "${HTTPS_PORT:-443}:443"

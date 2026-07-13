@@ -105,6 +105,7 @@ class CustomStatistic(Base, TimestampMixin):
 
 class PoeLeague(Base, TimestampMixin):
     __tablename__ = "poe_leagues"
+    __table_args__ = (Index("ix_poe_leagues_name_version", "name", "game_version", unique=True),)
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
@@ -120,6 +121,7 @@ class PoeLeague(Base, TimestampMixin):
 
 class PoeCharacter(Base, TimestampMixin):
     __tablename__ = "poe_characters"
+    __table_args__ = (Index("ix_poe_characters_league_id", "league_id"),)
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
@@ -133,17 +135,45 @@ class PoeCharacter(Base, TimestampMixin):
     build_name: Mapped[str | None] = mapped_column(String(255))
     main_skill: Mapped[str | None] = mapped_column(String(255))
     mode: Mapped[str | None] = mapped_column(String(100))
-    status: Mapped[str] = mapped_column(String(40), default="active", nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(40), default="ended", nullable=False, index=True)
     playtime_minutes: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    snapshot_source: Mapped[str] = mapped_column(String(40), default="manual", nullable=False)
     notes: Mapped[str | None] = mapped_column(Text)
 
     league: Mapped[PoeLeague | None] = relationship(back_populates="characters")
     currency_stats: Mapped[list["PoeCurrencyStat"]] = relationship(back_populates="character", cascade="all, delete-orphan")
+    equipment: Mapped[list["PoeEquipmentItem"]] = relationship(
+        back_populates="character",
+        cascade="all, delete-orphan",
+        order_by="PoeEquipmentItem.display_order",
+    )
+
+
+class PoeEquipmentItem(Base, TimestampMixin):
+    __tablename__ = "poe_equipment_items"
+    __table_args__ = (
+        UniqueConstraint("character_id", "slot", name="uq_poe_equipment_character_slot"),
+        Index("ix_poe_equipment_character_order", "character_id", "display_order"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    character_id: Mapped[int] = mapped_column(ForeignKey("poe_characters.id", ondelete="CASCADE"), nullable=False)
+    slot: Mapped[str] = mapped_column(String(80), nullable=False)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    base_type: Mapped[str | None] = mapped_column(String(255))
+    rarity: Mapped[str | None] = mapped_column(String(40))
+    item_text: Mapped[str] = mapped_column(Text, nullable=False)
+    display_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    character: Mapped[PoeCharacter] = relationship(back_populates="equipment")
 
 
 class PoeCurrencyStat(Base, TimestampMixin):
     __tablename__ = "poe_currency_stats"
-    __table_args__ = (UniqueConstraint("character_id", "name", name="uq_character_currency_name"),)
+    __table_args__ = (
+        UniqueConstraint("character_id", "name", name="uq_character_currency_name"),
+        Index("ix_poe_currency_stats_character_order", "character_id", "display_order", "name"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     character_id: Mapped[int] = mapped_column(ForeignKey("poe_characters.id", ondelete="CASCADE"), nullable=False)

@@ -1,17 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { Gem, Skull, Swords } from "lucide-react";
+import { Gem, Skull } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { poeCharacterStatusLabel } from "@/lib/poe";
 import { formatMinutes } from "@/lib/utils";
 import type { PoeCharacter } from "@/types";
 
 export function PoeCharacterCard({ character }: { character: PoeCharacter }) {
   return (
-    <Link href={`/poe/characters/${character.id}`} className="block">
-      <Card className="transition hover:border-accent/70">
+    <Link
+      href={`/poe/characters/${character.id}`}
+      className="block min-w-0 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      <Card className="min-w-0 transition hover:border-accent/70">
         <CardContent className="space-y-4 p-4">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
@@ -28,11 +32,7 @@ export function PoeCharacterCard({ character }: { character: PoeCharacter }) {
           <div className="grid grid-cols-3 gap-2 text-sm">
             <Metric label="Level" value={String(character.level)} />
             <Metric label="Czas" value={formatMinutes(character.playtime_minutes)} />
-            <Metric label="Status" value={character.status} />
-          </div>
-          <div className="flex items-center gap-2 rounded-md bg-background/60 p-3 text-sm text-muted-foreground">
-            <Swords className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
-            <span className="truncate">{character.build_name || character.main_skill || "Build bez nazwy"}</span>
+            <Metric label="Status" value={poeCharacterStatusLabel(character.status)} />
           </div>
         </CardContent>
       </Card>
@@ -48,4 +48,3 @@ function Metric({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
-

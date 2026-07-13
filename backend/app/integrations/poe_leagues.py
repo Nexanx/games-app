@@ -36,25 +36,27 @@ class PoeLeagueProvider:
 
         versions = [game_version] if game_version else ["poe1", "poe2"]
         leagues: list[PoeLeagueCandidate] = []
-        for version in versions:
-            realm = "poe2" if version == "poe2" else "pc"
-            leagues.extend(await self._fetch_realm(realm, version))
+        async with httpx.AsyncClient(timeout=15) as client:
+            for version in versions:
+                realm = "poe2" if version == "poe2" else "pc"
+                leagues.extend(await self._fetch_realm(client, realm, version))
         return leagues
 
-    async def _fetch_realm(self, realm: str, game_version: str) -> list[PoeLeagueCandidate]:
+    async def _fetch_realm(
+        self, client: httpx.AsyncClient, realm: str, game_version: str
+    ) -> list[PoeLeagueCandidate]:
         params = {"realm": realm, "type": "main", "limit": 50}
         headers = {
             "Authorization": f"Bearer {self.settings.poe_api_token}",
             "User-Agent": self.settings.app_name,
         }
         try:
-            async with httpx.AsyncClient(timeout=15) as client:
-                response = await client.get(self.api_url, params=params, headers=headers)
-                response.raise_for_status()
-        except httpx.HTTPError as exc:
+            response = await client.get(self.api_url, params=params, headers=headers)
+            response.raise_for_status()
+            payload = response.json()
+        except (httpx.HTTPError, ValueError) as exc:
             raise PoeLeagueProviderRequestError("Path of Exile league API request failed.") from exc
 
-        payload = response.json()
         return [
             self._to_candidate(item, game_version)
             for item in payload.get("leagues", [])

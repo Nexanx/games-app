@@ -14,6 +14,7 @@ from app.models import (
     Game,
     PoeCharacter,
     PoeCurrencyStat,
+    PoeEquipmentItem,
     PoeLeague,
 )
 from app.schemas.backup import (
@@ -28,6 +29,7 @@ from app.schemas.backup import (
     BackupImportResult,
     BackupPoeCharacter,
     BackupPoeCurrencyStatistic,
+    BackupPoeEquipmentItem,
     BackupPoeLeague,
 )
 
@@ -61,6 +63,10 @@ def export_backup(db: Session) -> BackupDocument:
                 BackupPoeCurrencyStatistic.model_validate(item, from_attributes=True)
                 for item in db.scalars(select(PoeCurrencyStat).order_by(PoeCurrencyStat.id))
             ],
+            poe_equipment_items=[
+                BackupPoeEquipmentItem.model_validate(item, from_attributes=True)
+                for item in db.scalars(select(PoeEquipmentItem).order_by(PoeEquipmentItem.id))
+            ],
             chat_sessions=[
                 BackupChatSession.model_validate(item, from_attributes=True)
                 for item in db.scalars(select(ChatSession).order_by(ChatSession.id))
@@ -93,6 +99,7 @@ def _delete_existing_records(db: Session) -> None:
         ChatMessage,
         ChatSession,
         PoeCurrencyStat,
+        PoeEquipmentItem,
         PoeCharacter,
         PoeLeague,
         CustomStatistic,
@@ -198,6 +205,7 @@ def _restore_records(db: Session, data: BackupData) -> dict[str, int]:
             mode=item.mode,
             status=item.status,
             playtime_minutes=item.playtime_minutes,
+            snapshot_source=item.snapshot_source,
             notes=item.notes,
             created_at=item.created_at,
             updated_at=item.updated_at,
@@ -217,6 +225,21 @@ def _restore_records(db: Session, data: BackupData) -> dict[str, int]:
                 value=item.value,
                 display_order=item.display_order,
                 notes=item.notes,
+                created_at=item.created_at,
+                updated_at=item.updated_at,
+            )
+        )
+
+    for item in data.poe_equipment_items:
+        db.add(
+            PoeEquipmentItem(
+                character_id=character_ids[item.character_id],
+                slot=item.slot,
+                name=item.name,
+                base_type=item.base_type,
+                rarity=item.rarity,
+                item_text=item.item_text,
+                display_order=item.display_order,
                 created_at=item.created_at,
                 updated_at=item.updated_at,
             )
@@ -246,6 +269,7 @@ def _restore_records(db: Session, data: BackupData) -> dict[str, int]:
         "poe_leagues": len(data.poe_leagues),
         "poe_characters": len(data.poe_characters),
         "poe_currency_statistics": len(data.poe_currency_statistics),
+        "poe_equipment_items": len(data.poe_equipment_items),
         "chat_sessions": len(data.chat_sessions),
         "chat_messages": len(data.chat_messages),
     }
