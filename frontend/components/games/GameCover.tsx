@@ -1,10 +1,10 @@
 "use client";
 
 import { Gamepad2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 
-import { getGameCoverInitials, getGameCoverSource, type GameCoverVariant } from "@/lib/game-cover";
-import { cn } from "@/lib/utils";
+import { getGameCoverInitials, getGameCoverSource, type GameCoverVariant } from "../../lib/game-cover";
+import { cn } from "../../lib/utils";
 
 export function GameCover({
   src,

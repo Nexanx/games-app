@@ -334,15 +334,45 @@ export interface PoeCurrencyStat {
   updated_at: string;
 }
 
-export interface DashboardSummary {
-  games: { backlog: number; completed: number };
-  total_game_playtime_hours: number;
-  recent_backlog_entries: BacklogEntry[];
-  recent_completed_games: CompletedGameEntry[];
-  poe_character_count: number;
-  recent_poe_characters: PoeCharacter[];
-  poe_playtime_by_version: Record<string, number>;
-  top_currency_drops: Array<{ name: string; value: number; category: string; icon_url?: string | null }>;
+export interface DashboardMonthSummary {
+  month: number;
+  completed_games_count: number;
+  total_playtime_hours: number;
+}
+
+export interface DashboardCurrentYearSummary {
+  year: number;
+  completed_games_count: number;
+  total_playtime_hours: number;
+  games_with_playtime_count: number;
+  average_rating?: number | null;
+  rated_games_count: number;
+  most_active_month?: DashboardMonthSummary | null;
+  top_platform?: string | null;
+  trend: DashboardMonthSummary[];
+}
+
+export interface DashboardBacklogEntry {
+  id: number;
+  position: number;
+  title: string;
+  cover_url?: string | null;
+  preferred_platform?: string | null;
+  note?: string | null;
+}
+
+export interface DashboardCompletedGame {
+  id: number;
+  title: string;
+  cover_url?: string | null;
+  completion_date: string;
+  playtime_hours: number;
+  rating?: number | null;
+}
+
+export interface DashboardPoeSummary {
+  character_count: number;
+  playtime_by_version: Record<string, number>;
   latest_league: {
     name?: string | null;
     game_version?: string | null;
@@ -350,6 +380,17 @@ export interface DashboardSummary {
     characters: number;
     playtime_minutes: number;
   };
+}
+
+export interface DashboardSummary {
+  games: {
+    backlog_count: number;
+    current_year: DashboardCurrentYearSummary;
+    next_backlog_entries: DashboardBacklogEntry[];
+    recent_completed_games: DashboardCompletedGame[];
+  };
+  poe?: DashboardPoeSummary | null;
+  poe_error?: string | null;
 }
 
 export interface ChatMessage {

@@ -145,7 +145,7 @@ async function readApiError(response: Response): Promise<ApiError> {
 }
 
 export const api = {
-  dashboard: () => request<DashboardSummary>("/dashboard/summary"),
+  dashboard: (signal?: AbortSignal) => request<DashboardSummary>("/dashboard/summary", { signal }),
   searchGames: (query: string, page = 1, pageSize = 10, signal?: AbortSignal) =>
     request<GameSearchPage>(`/games/search${qs({ query, page, page_size: pageSize })}`, { signal }),
   createGame: (payload: Partial<Game>) =>
