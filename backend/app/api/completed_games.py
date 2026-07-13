@@ -1,4 +1,5 @@
 from datetime import date
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import desc, func, select
@@ -6,7 +7,14 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.database.session import get_session
 from app.models import BacklogEntry, CompletedGameEntry, CustomStatistic, Game
-from app.schemas.completed_games import CompletedGamesComparisonRead, CompletedGamesYearDashboardRead
+from app.schemas.completed_games import (
+    CompletedGamesComparisonRead,
+    CompletedGamesForecastRead,
+    CompletedGamesMonthComparisonRead,
+    CompletedGamesYearActivityRead,
+    CompletedGamesYearDashboardRead,
+    CompletedGamesYearReportRead,
+)
 from app.schemas.games import (
     CompletedGameEntryCreate,
     CompletedGameEntryRead,
@@ -22,6 +30,12 @@ from app.services.completed_games_service import (
     build_year_dashboard,
     filter_completed_entries,
     get_completed_entries_for_year,
+)
+from app.services.analytics_service import (
+    build_forecast,
+    build_month_comparison,
+    build_year_activity,
+    build_year_report,
 )
 
 router = APIRouter()
@@ -109,6 +123,51 @@ def compare_completed_games(
     if len(unique_years) > 8 or any(year < 1900 or year > 9998 for year in unique_years):
         raise HTTPException(status_code=422, detail="Invalid years selection")
     return build_comparison(db, unique_years)
+
+
+@router.get("/year/{year}/report", response_model=CompletedGamesYearReportRead)
+def get_completed_games_year_report(
+    year: int,
+    db: Session = Depends(get_session),
+) -> CompletedGamesYearReportRead:
+    if year < 1900 or year > 9998:
+        raise HTTPException(status_code=422, detail="Invalid year")
+    return build_year_report(
+        year,
+        get_completed_entries_for_year(db, year),
+        get_completed_entries_for_year(db, year - 1),
+    )
+
+
+@router.get("/year/{year}/activity", response_model=CompletedGamesYearActivityRead)
+def get_completed_games_year_activity(
+    year: int,
+    db: Session = Depends(get_session),
+) -> CompletedGamesYearActivityRead:
+    if year < 1900 or year > 9998:
+        raise HTTPException(status_code=422, detail="Invalid year")
+    return build_year_activity(year, get_completed_entries_for_year(db, year))
+
+
+@router.get("/month-comparison", response_model=CompletedGamesMonthComparisonRead)
+def compare_completed_game_months(
+    year: int = Query(..., ge=1900, le=9998),
+    month_a: int = Query(..., ge=1, le=12),
+    month_b: int = Query(..., ge=1, le=12),
+    db: Session = Depends(get_session),
+) -> CompletedGamesMonthComparisonRead:
+    if month_a == month_b:
+        raise HTTPException(status_code=422, detail="Select two different months")
+    return build_month_comparison(year, month_a, month_b, get_completed_entries_for_year(db, year))
+
+
+@router.get("/forecast", response_model=CompletedGamesForecastRead)
+def get_completed_games_forecast(
+    metric: Literal["completed_games", "playtime"] = Query(default="completed_games"),
+    months_ahead: int = Query(default=6, ge=1, le=12),
+    db: Session = Depends(get_session),
+) -> CompletedGamesForecastRead:
+    return build_forecast(db, metric, months_ahead)
 
 
 @router.post("", response_model=CompletedGameEntryRead, status_code=201)

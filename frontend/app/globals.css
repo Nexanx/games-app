@@ -68,3 +68,31 @@ select {
   height: 1px;
   background: linear-gradient(90deg, transparent, rgba(233, 185, 95, 0.8), transparent);
 }
+
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+
+  .annual-report-print,
+  .annual-report-print * {
+    visibility: visible !important;
+  }
+
+  .annual-report-print {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    color: #111827;
+    background: white;
+  }
+
+  .annual-report-print .print-hide {
+    display: none !important;
+  }
+
+  .annual-report-print > *,
+  .annual-report-print .rounded-lg {
+    break-inside: avoid;
+  }
+}

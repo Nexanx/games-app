@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from datetime import date
+from statistics import median
 from typing import Iterable
 
 from sqlalchemy import and_, desc, or_, select
@@ -113,6 +114,7 @@ def build_year_dashboard(
         longest_games=[_highlight(entry) for entry in longest_entries[:5]],
         shortest_games=[_highlight(entry) for entry in shortest_entries[:5]],
         latest_completions=[_highlight(entry) for entry in latest_entries[:5]],
+        scatter_games=[_highlight(entry) for entry in entry_list if entry.playtime_hours > 0 and entry.rating is not None],
         filter_options=_filter_options(filter_option_entries if filter_option_entries is not None else entry_list),
     )
 
@@ -173,15 +175,29 @@ def _monthly_summaries(
         if not month_entries and not include_empty:
             continue
         ratings = [entry.rating for entry in month_entries if entry.rating is not None]
-        total_playtime = sum(entry.playtime_hours for entry in month_entries)
-        games_with_playtime_count = sum(entry.playtime_hours > 0 for entry in month_entries)
+        playtimes = [entry.playtime_hours for entry in month_entries if entry.playtime_hours > 0]
+        total_playtime = sum(playtimes)
+        games_with_playtime_count = len(playtimes)
+        platforms = {_normalize(entry.platform) for entry in month_entries if _normalize(entry.platform)}
+        genres = {_normalize(genre) for entry in month_entries for genre in entry.game.genres if _normalize(genre)}
+        best_rated = sorted(
+            (entry for entry in month_entries if entry.rating is not None),
+            key=lambda entry: (-(entry.rating or 0), -entry.completion_date.toordinal(), entry.game.title.casefold(), entry.id),
+        )
         summaries.append(
             CompletedGamesMonthSummaryRead(
                 month=month,
                 completed_games_count=len(month_entries),
                 total_playtime_hours=_rounded(total_playtime),
                 games_with_playtime_count=games_with_playtime_count,
+                average_playtime_hours=_rounded(total_playtime / games_with_playtime_count) if games_with_playtime_count else None,
+                median_playtime_hours=_rounded(median(playtimes)) if playtimes else None,
                 average_rating=_rounded(sum(ratings) / len(ratings)) if ratings else None,
+                median_rating=_rounded(median(ratings)) if ratings else None,
+                rated_games_count=len(ratings),
+                unique_platforms_count=len(platforms),
+                unique_genres_count=len(genres),
+                best_rated_game=_highlight(best_rated[0]) if best_rated else None,
             )
         )
     return summaries
@@ -248,6 +264,8 @@ def _highlight(entry: CompletedGameEntry | None) -> CompletedGameHighlightRead |
         playtime_hours=_rounded(entry.playtime_hours),
         rating=entry.rating,
         cover_url=entry.game.cover_url,
+        platform=entry.platform,
+        genres=entry.game.genres,
     )
 
 

@@ -1,23 +1,16 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import Link from "next/link";
-import { BarChart3, CalendarDays, Clock3, Gamepad2, ListOrdered, Star, Timer, Trophy } from "lucide-react";
+import { CalendarDays, Clock3, Gamepad2, ListOrdered, Star, Timer, Trophy } from "lucide-react";
 
 import { StatCard } from "@/components/dashboard/StatCard";
 import { GameCover } from "@/components/games/GameCover";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { buildAnalyticsInsights, trendValue, trendValueLabel, type TrendMetric } from "@/lib/analytics";
+import { buildAnalyticsInsights } from "@/lib/analytics";
 import { completedYearFiltersToSearchParams, polishMonthNames, type CompletedYearFilters } from "@/lib/completed-games";
 import { asDate, formatHours } from "@/lib/utils";
 import type { CompletedGameHighlight, CompletedGamesDistributionItem, CompletedGamesYearDashboard } from "@/types";
-
-const trendMetrics: Array<{ value: TrendMetric; label: string }> = [
-  { value: "games", label: "Ukończone gry" },
-  { value: "time", label: "Czas gry" },
-  { value: "rating", label: "Średnia ocena" }
-];
 
 export function CompletedYearDashboard({
   dashboard,
@@ -54,8 +47,6 @@ export function CompletedYearDashboard({
         </Card>
       ) : null}
 
-      <MonthlyTrend dashboard={dashboard} filters={filters} />
-
       <div className="grid min-w-0 gap-4 xl:grid-cols-2">
         <DistributionCard title="Platformy" description="Udział według platformy zapisanej przy ukończeniu." items={dashboard.platforms} kind="platform" year={dashboard.year} filters={filters} />
         <DistributionCard title="Gatunki" description="Procent oznacza udział ukończonych gier z danym gatunkiem. Gra wielogatunkowa jest liczona w każdej kategorii, więc suma może przekroczyć 100%." items={dashboard.genres} kind="genre" year={dashboard.year} filters={filters} />
@@ -71,46 +62,6 @@ export function CompletedYearDashboard({
         {dashboard.shortest_games.length ? <details className="rounded-lg border border-border bg-card/70 p-4"><summary className="cursor-pointer font-semibold">Pokaż najkrótsze ukończone gry</summary><div className="mt-3"><RankingList entries={dashboard.shortest_games} metric={(entry) => formatHours(entry.playtime_hours)} /></div></details> : null}
       </section>
     </section>
-  );
-}
-
-function MonthlyTrend({ dashboard, filters }: { dashboard: CompletedGamesYearDashboard; filters: CompletedYearFilters }) {
-  const [metric, setMetric] = useState<TrendMetric>("games");
-  const maximum = Math.max(1, ...dashboard.monthly.map((month) => trendValue(month, metric)));
-  return (
-    <Card className="min-w-0">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2"><BarChart3 className="h-5 w-5 text-primary" aria-hidden="true" />Trend miesięczny</CardTitle>
-        <CardDescription>Pełny rok od stycznia do grudnia. Kliknij miesiąc, aby przejść do wpisów źródłowych.</CardDescription>
-      </CardHeader>
-      <CardContent className="min-w-0 space-y-5">
-        <div className="flex flex-wrap gap-2" aria-label="Metryka wykresu">
-          {trendMetrics.map((item) => <Button key={item.value} type="button" className="min-h-9 px-3 py-1.5 text-sm" variant={metric === item.value ? "primary" : "secondary"} aria-pressed={metric === item.value} onClick={() => setMetric(item.value)}>{item.label}</Button>)}
-        </div>
-        <div className="grid h-60 min-w-0 grid-cols-12 items-end gap-1 border-b border-l border-border px-1 pt-4 sm:gap-2" role="img" aria-label={`Trend miesięczny: ${trendMetrics.find((item) => item.value === metric)?.label}`}>
-          {dashboard.monthly.map((month) => {
-            const value = trendValue(month, metric);
-            const hasRating = month.average_rating != null;
-            const hasTime = month.games_with_playtime_count > 0;
-            const hasMetricData = metric !== "rating" || hasRating;
-            const hasVisibleValue = metric !== "time" || hasTime;
-            const query = completedYearFiltersToSearchParams({ ...filters, month: month.month }).toString();
-            return (
-              <Link key={month.month} href={`/completed-games/${dashboard.year}?${query}`} className="group flex h-full min-w-0 flex-col items-center justify-end gap-1 focus-visible:rounded" title={`${polishMonthNames[month.month - 1]}: ${hasVisibleValue ? trendValueLabel(value, metric, hasRating) : "Brak danych o czasie gry"}`}>
-                <span className="text-[10px] tabular-nums text-muted-foreground sm:text-xs">{!hasMetricData || !hasVisibleValue ? "–" : formatCompact(value)}</span>
-                <span className="w-full min-w-1 rounded-t bg-emerald-400 transition group-hover:bg-emerald-300" style={{ height: `${value ? Math.max(5, value / maximum * 100) : 0}%` }} />
-                <span className="pb-1 text-[10px] text-muted-foreground sm:hidden">{polishMonthNames[month.month - 1].slice(0, 1)}</span>
-                <span className="hidden pb-1 text-[10px] text-muted-foreground sm:block">{polishMonthNames[month.month - 1].slice(0, 3)}</span>
-              </Link>
-            );
-          })}
-        </div>
-        <details>
-          <summary className="cursor-pointer text-sm font-semibold">Pokaż dane wykresu w tabeli</summary>
-          <div className="mt-3 overflow-x-auto"><table className="w-full min-w-[420px] text-left text-sm"><thead className="border-b border-border text-xs text-muted-foreground"><tr><th className="pb-2">Miesiąc</th><th className="pb-2">Gry</th><th className="pb-2">Czas</th><th className="pb-2">Średnia ocena</th></tr></thead><tbody>{dashboard.monthly.map((month) => <tr key={month.month} className="border-b border-border/60 last:border-0"><td className="py-2 font-medium">{polishMonthNames[month.month - 1]}</td><td>{month.completed_games_count}</td><td>{month.games_with_playtime_count ? formatHours(month.total_playtime_hours) : "Brak danych"}</td><td>{month.average_rating == null ? "Brak ocen" : `${formatNumber(month.average_rating)}/10`}</td></tr>)}</tbody></table></div>
-        </details>
-      </CardContent>
-    </Card>
   );
 }
 
@@ -135,5 +86,4 @@ function RankingList({ entries, metric }: { entries: CompletedGameHighlight[]; m
 }
 
 function formatNumber(value: number) { return new Intl.NumberFormat("pl-PL", { maximumFractionDigits: 2 }).format(value); }
-function formatCompact(value: number) { return new Intl.NumberFormat("pl-PL", { maximumFractionDigits: 1 }).format(value); }
 function completionCountLabel(count: number) { return count === 1 ? "1 ukończenie" : count >= 2 && count <= 4 ? `${count} ukończenia` : `${count} ukończeń`; }

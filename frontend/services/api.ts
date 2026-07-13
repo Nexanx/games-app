@@ -7,8 +7,12 @@ import type {
   ChatSession,
   ChatStatus,
   CompletedGamesComparison,
+  CompletedGamesForecast,
   CompletedGamesFilters,
+  CompletedGamesMonthComparison,
+  CompletedGamesYearActivity,
   CompletedGamesYearDashboard,
+  CompletedGamesYearReport,
   DashboardSummary,
   Game,
   GameSearchPage,
@@ -163,6 +167,14 @@ export const api = {
     request<CompletedGameEntry[]>(`/completed-games${qs({ year, ...filters })}`, { signal }),
   getCompletedYearDashboard: (year: number, filters: CompletedGamesFilters = {}, signal?: AbortSignal) =>
     request<CompletedGamesYearDashboard>(`/completed-games/year/${year}/dashboard${qs({ ...filters })}`, { signal }),
+  getCompletedYearReport: (year: number, signal?: AbortSignal) =>
+    request<CompletedGamesYearReport>(`/completed-games/year/${year}/report`, { signal, timeoutMs: 30_000 }),
+  getCompletedYearActivity: (year: number, signal?: AbortSignal) =>
+    request<CompletedGamesYearActivity>(`/completed-games/year/${year}/activity`, { signal }),
+  compareCompletedMonths: (year: number, monthA: number, monthB: number, signal?: AbortSignal) =>
+    request<CompletedGamesMonthComparison>(`/completed-games/month-comparison${qs({ year, month_a: monthA, month_b: monthB })}`, { signal }),
+  getCompletedGamesForecast: (metric: "completed_games" | "playtime", monthsAhead = 6, signal?: AbortSignal) =>
+    request<CompletedGamesForecast>(`/completed-games/forecast${qs({ metric, months_ahead: monthsAhead })}`, { signal, timeoutMs: 30_000 }),
   compareCompletedYears: (years: number[]) =>
     request<CompletedGamesComparison>(`/completed-games/comparison${qs({ years: years.join(",") })}`),
   getCompletedGame: (id: number) => request<CompletedGameEntry>(`/completed-games/${id}`),

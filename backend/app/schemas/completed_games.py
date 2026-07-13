@@ -8,6 +8,8 @@ class CompletedGameHighlightRead(BaseModel):
     playtime_hours: float
     rating: float | None = None
     cover_url: str | None = None
+    platform: str | None = None
+    genres: list[str] = Field(default_factory=list)
 
 
 class CompletedGamesMonthSummaryRead(BaseModel):
@@ -15,7 +17,14 @@ class CompletedGamesMonthSummaryRead(BaseModel):
     completed_games_count: int
     total_playtime_hours: float
     games_with_playtime_count: int = 0
+    average_playtime_hours: float | None = None
+    median_playtime_hours: float | None = None
     average_rating: float | None = None
+    median_rating: float | None = None
+    rated_games_count: int = 0
+    unique_platforms_count: int = 0
+    unique_genres_count: int = 0
+    best_rated_game: CompletedGameHighlightRead | None = None
 
 
 class CompletedGamesFilterOptionsRead(BaseModel):
@@ -51,6 +60,7 @@ class CompletedGamesYearDashboardRead(BaseModel):
     longest_games: list[CompletedGameHighlightRead] = Field(default_factory=list)
     shortest_games: list[CompletedGameHighlightRead] = Field(default_factory=list)
     latest_completions: list[CompletedGameHighlightRead] = Field(default_factory=list)
+    scatter_games: list[CompletedGameHighlightRead] = Field(default_factory=list)
     filter_options: CompletedGamesFilterOptionsRead
 
 
@@ -65,3 +75,100 @@ class CompletedGamesComparisonYearRead(BaseModel):
 
 class CompletedGamesComparisonRead(BaseModel):
     years: list[CompletedGamesComparisonYearRead] = Field(default_factory=list)
+
+
+class CompletedGamesPeriodMetricsRead(BaseModel):
+    completed_games_count: int = 0
+    total_playtime_hours: float = 0
+    average_playtime_hours: float | None = None
+    median_playtime_hours: float | None = None
+    games_with_playtime_count: int = 0
+    average_rating: float | None = None
+    median_rating: float | None = None
+    rated_games_count: int = 0
+    unrated_games_count: int = 0
+    unique_platforms_count: int = 0
+    unique_genres_count: int = 0
+    top_platform: CompletedGamesDistributionItemRead | None = None
+    top_genre: CompletedGamesDistributionItemRead | None = None
+    best_rated_game: CompletedGameHighlightRead | None = None
+    longest_game: CompletedGameHighlightRead | None = None
+    shortest_game: CompletedGameHighlightRead | None = None
+
+
+class CompletedGamesPeriodDifferenceRead(BaseModel):
+    metric: str
+    current_value: float | None = None
+    previous_value: float | None = None
+    absolute_change: float | None = None
+    percentage_change: float | None = None
+    has_percentage_baseline: bool = False
+
+
+class CompletedGamesYearReportRead(BaseModel):
+    year: int
+    generated_at: str
+    summary: CompletedGamesPeriodMetricsRead
+    monthly: list[CompletedGamesMonthSummaryRead] = Field(default_factory=list)
+    platforms: list[CompletedGamesDistributionItemRead] = Field(default_factory=list)
+    genres: list[CompletedGamesDistributionItemRead] = Field(default_factory=list)
+    first_completion: CompletedGameHighlightRead | None = None
+    last_completion: CompletedGameHighlightRead | None = None
+    longest_active_streak_months: int = 0
+    most_active_month: CompletedGamesMonthSummaryRead | None = None
+    most_playtime_month: CompletedGamesMonthSummaryRead | None = None
+    most_diverse_month: CompletedGamesMonthSummaryRead | None = None
+    insights: list[str] = Field(default_factory=list)
+    previous_year: int | None = None
+    previous_year_differences: list[CompletedGamesPeriodDifferenceRead] = Field(default_factory=list)
+    scatter_games: list[CompletedGameHighlightRead] = Field(default_factory=list)
+
+
+class CompletedGamesDayActivityRead(BaseModel):
+    date: str
+    completed_games_count: int
+    total_playtime_hours: float
+    average_rating: float | None = None
+    games: list[CompletedGameHighlightRead] = Field(default_factory=list)
+
+
+class CompletedGamesYearActivityRead(BaseModel):
+    year: int
+    days: list[CompletedGamesDayActivityRead] = Field(default_factory=list)
+
+
+class CompletedGamesMonthPeriodRead(BaseModel):
+    month: int = Field(..., ge=1, le=12)
+    summary: CompletedGamesPeriodMetricsRead
+    platforms: list[CompletedGamesDistributionItemRead] = Field(default_factory=list)
+    genres: list[CompletedGamesDistributionItemRead] = Field(default_factory=list)
+    games: list[CompletedGameHighlightRead] = Field(default_factory=list)
+
+
+class CompletedGamesMonthComparisonRead(BaseModel):
+    year: int
+    month_a: CompletedGamesMonthPeriodRead
+    month_b: CompletedGamesMonthPeriodRead
+    differences: list[CompletedGamesPeriodDifferenceRead] = Field(default_factory=list)
+
+
+class CompletedGamesForecastPointRead(BaseModel):
+    period: str
+    value: float
+    lower_bound: float | None = None
+    upper_bound: float | None = None
+
+
+class CompletedGamesForecastRead(BaseModel):
+    metric: str
+    sufficient_data: bool
+    reason: str | None = None
+    model: str | None = None
+    historical: list[CompletedGamesForecastPointRead] = Field(default_factory=list)
+    forecast: list[CompletedGamesForecastPointRead] = Field(default_factory=list)
+    mae: float | None = None
+    rmse: float | None = None
+    observations_count: int = 0
+    active_months_count: int = 0
+    source_entries_count: int = 0
+    minimum_requirements: str

@@ -82,6 +82,8 @@ export interface CompletedGameHighlight {
   playtime_hours: number;
   rating?: number | null;
   cover_url?: string | null;
+  platform?: string | null;
+  genres?: string[];
 }
 
 export interface CompletedGamesMonthSummary {
@@ -89,7 +91,14 @@ export interface CompletedGamesMonthSummary {
   completed_games_count: number;
   total_playtime_hours: number;
   games_with_playtime_count: number;
+  average_playtime_hours?: number | null;
+  median_playtime_hours?: number | null;
   average_rating?: number | null;
+  median_rating?: number | null;
+  rated_games_count: number;
+  unique_platforms_count: number;
+  unique_genres_count: number;
+  best_rated_game?: CompletedGameHighlight | null;
 }
 
 export interface CompletedGamesFilterOptions {
@@ -125,6 +134,7 @@ export interface CompletedGamesYearDashboard {
   longest_games: CompletedGameHighlight[];
   shortest_games: CompletedGameHighlight[];
   latest_completions: CompletedGameHighlight[];
+  scatter_games: CompletedGameHighlight[];
   filter_options: CompletedGamesFilterOptions;
 }
 
@@ -139,6 +149,103 @@ export interface CompletedGamesComparisonYear {
 
 export interface CompletedGamesComparison {
   years: CompletedGamesComparisonYear[];
+}
+
+export interface CompletedGamesPeriodMetrics {
+  completed_games_count: number;
+  total_playtime_hours: number;
+  average_playtime_hours?: number | null;
+  median_playtime_hours?: number | null;
+  games_with_playtime_count: number;
+  average_rating?: number | null;
+  median_rating?: number | null;
+  rated_games_count: number;
+  unrated_games_count: number;
+  unique_platforms_count: number;
+  unique_genres_count: number;
+  top_platform?: CompletedGamesDistributionItem | null;
+  top_genre?: CompletedGamesDistributionItem | null;
+  best_rated_game?: CompletedGameHighlight | null;
+  longest_game?: CompletedGameHighlight | null;
+  shortest_game?: CompletedGameHighlight | null;
+}
+
+export interface CompletedGamesPeriodDifference {
+  metric: string;
+  current_value?: number | null;
+  previous_value?: number | null;
+  absolute_change?: number | null;
+  percentage_change?: number | null;
+  has_percentage_baseline: boolean;
+}
+
+export interface CompletedGamesYearReport {
+  year: number;
+  generated_at: string;
+  summary: CompletedGamesPeriodMetrics;
+  monthly: CompletedGamesMonthSummary[];
+  platforms: CompletedGamesDistributionItem[];
+  genres: CompletedGamesDistributionItem[];
+  first_completion?: CompletedGameHighlight | null;
+  last_completion?: CompletedGameHighlight | null;
+  longest_active_streak_months: number;
+  most_active_month?: CompletedGamesMonthSummary | null;
+  most_playtime_month?: CompletedGamesMonthSummary | null;
+  most_diverse_month?: CompletedGamesMonthSummary | null;
+  insights: string[];
+  previous_year?: number | null;
+  previous_year_differences: CompletedGamesPeriodDifference[];
+  scatter_games: CompletedGameHighlight[];
+}
+
+export interface CompletedGamesDayActivity {
+  date: string;
+  completed_games_count: number;
+  total_playtime_hours: number;
+  average_rating?: number | null;
+  games: CompletedGameHighlight[];
+}
+
+export interface CompletedGamesYearActivity {
+  year: number;
+  days: CompletedGamesDayActivity[];
+}
+
+export interface CompletedGamesMonthPeriod {
+  month: number;
+  summary: CompletedGamesPeriodMetrics;
+  platforms: CompletedGamesDistributionItem[];
+  genres: CompletedGamesDistributionItem[];
+  games: CompletedGameHighlight[];
+}
+
+export interface CompletedGamesMonthComparison {
+  year: number;
+  month_a: CompletedGamesMonthPeriod;
+  month_b: CompletedGamesMonthPeriod;
+  differences: CompletedGamesPeriodDifference[];
+}
+
+export interface CompletedGamesForecastPoint {
+  period: string;
+  value: number;
+  lower_bound?: number | null;
+  upper_bound?: number | null;
+}
+
+export interface CompletedGamesForecast {
+  metric: "completed_games" | "playtime";
+  sufficient_data: boolean;
+  reason?: string | null;
+  model?: string | null;
+  historical: CompletedGamesForecastPoint[];
+  forecast: CompletedGamesForecastPoint[];
+  mae?: number | null;
+  rmse?: number | null;
+  observations_count: number;
+  active_months_count: number;
+  source_entries_count: number;
+  minimum_requirements: string;
 }
 
 export interface BacklogBatchItem {

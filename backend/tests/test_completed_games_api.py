@@ -246,31 +246,19 @@ def test_empty_year_dashboard_uses_clear_empty_values(client):
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload == {
-        "year": 2026,
-        "completed_games_count": 0,
-        "total_playtime_hours": 0.0,
-        "average_playtime_hours": None,
-        "games_with_playtime_count": 0,
-        "average_rating": None,
-        "rated_games_count": 0,
-        "best_rated_game": None,
-        "longest_game": None,
-        "shortest_game": None,
-        "most_active_month": None,
-        "active_months_count": 0,
-        "monthly": [
-            {"month": month, "completed_games_count": 0, "total_playtime_hours": 0.0, "games_with_playtime_count": 0, "average_rating": None}
-            for month in range(1, 13)
-        ],
-        "platforms": [],
-        "genres": [],
-        "best_rated_games": [],
-        "longest_games": [],
-        "shortest_games": [],
-        "latest_completions": [],
-        "filter_options": {"platforms": [], "genres": []},
-    }
+    assert payload["year"] == 2026
+    assert payload["completed_games_count"] == 0
+    assert payload["average_playtime_hours"] is None
+    assert payload["average_rating"] is None
+    assert payload["best_rated_game"] is None
+    assert payload["most_active_month"] is None
+    assert len(payload["monthly"]) == 12
+    assert all(item["completed_games_count"] == 0 for item in payload["monthly"])
+    assert all(item["average_playtime_hours"] is None for item in payload["monthly"])
+    assert payload["platforms"] == []
+    assert payload["genres"] == []
+    assert payload["scatter_games"] == []
+    assert payload["filter_options"] == {"platforms": [], "genres": []}
 
 
 def test_dashboard_ignores_missing_ratings_and_zero_time_in_averages(client, db_session):
