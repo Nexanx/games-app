@@ -22,6 +22,7 @@ import { createPortal } from "react-dom";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { poeSlotLabel } from "@/lib/poe";
+import { parsePoeItemText, type PoeItemModifier, type PoeItemModifierTag } from "@/lib/poe-item";
 import type { PoeEquipmentItem } from "@/types";
 
 type RarityTheme = {
@@ -241,7 +242,7 @@ function PoeItemTooltip({
   tooltipRef: RefObject<HTMLDivElement | null>;
   theme: RarityTheme;
 }) {
-  const lines = itemDetails(item);
+  const details = parsePoeItemText(item);
 
   return (
     <div
@@ -257,64 +258,92 @@ function PoeItemTooltip({
         <p className="mt-1 text-[0.65rem] uppercase tracking-[0.2em] text-white/55">{theme.label}</p>
       </div>
       <div className="max-h-[calc(100vh-8rem)] overflow-x-hidden overflow-y-auto px-5 py-3 text-sm leading-6 text-[#c8c8c8]">
-        {lines.map((line, index) =>
-          isDivider(line) ? (
-            <div key={`${index}-${line}`} className="my-2 h-px bg-gradient-to-r from-transparent via-[#77775b]/75 to-transparent" />
-          ) : (
-            <p key={`${index}-${line}`} className={`break-words ${itemLineTone(line)}`}>
-              {line || "\u00a0"}
-            </p>
-          )
-        )}
+        <PoeItemTextSection title="Właściwości" lines={details.properties} />
+        <PoeItemTextSection title="Wymagania" lines={details.requirements} />
+        <PoeItemModifierSection title="Modyfikatory implicit" modifiers={details.implicits} kind="implicit" />
+        <PoeItemModifierSection title="Modyfikatory explicit" modifiers={details.explicits} kind="explicit" />
+        <PoeItemTextSection title="Stan przedmiotu" lines={details.statuses} status />
       </div>
     </div>
   );
 }
 
-function itemDetails(item: PoeEquipmentItem) {
-  const lines = item.item_text.split(/\r?\n/).map((line) => line.trim());
-  const selectedVariant = lines
-    .map((line) => line.match(/^Selected Variant:\s*(\d+)/i)?.[1])
-    .find(Boolean);
+function PoeItemTextSection({ title, lines, status = false }: { title: string; lines: string[]; status?: boolean }) {
+  if (!lines.length) return null;
 
-  return lines.flatMap((line) => {
-    const normalized = line.toLocaleLowerCase();
-    const variant = line.match(/\{variant:(\d+)\}/i)?.[1];
-    const isIdentity = [item.name, item.base_type]
-      .filter(Boolean)
-      .some((identity) => line.localeCompare(identity!, undefined, { sensitivity: "accent" }) === 0);
-    const isInternal =
-      !line ||
-      normalized.startsWith("rarity:") ||
-      normalized.startsWith("unique id:") ||
-      normalized === "new item" ||
-      isIdentity ||
-      /^(crafted|prefix|suffix):/i.test(line) ||
-      /^variant:/i.test(line) ||
-      /^selected variant:/i.test(line) ||
-      /basepercentile:/i.test(line);
-
-    if (isInternal || (variant && selectedVariant && variant !== selectedVariant)) return [];
-    if (/^implicits:\s*\d+/i.test(line)) return ["--------"];
-
-    const cleaned = line
-      .replace(/\{[^}]*\}/g, "")
-      .replace(/^LevelReq:\s*/i, "Wymagany poziom: ")
-      .trim();
-    return cleaned ? [cleaned] : [];
-  });
+  return (
+    <section className="border-t border-[#77775b]/45 py-2 first:border-t-0 first:pt-0">
+      <h4 className="mb-1 text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-[#a7aa8b]">{title}</h4>
+      {lines.map((line) => (
+        <p key={line} className={`break-words ${status && normalizeItemLine(line) === "corrupted" ? "font-semibold text-[#d96d6d]" : "text-[#d7dde5]"}`}>
+          {line}
+        </p>
+      ))}
+    </section>
+  );
 }
 
-function isDivider(line: string) {
-  return /^-{3,}$/.test(line);
+function PoeItemModifierSection({
+  title,
+  modifiers,
+  kind
+}: {
+  title: string;
+  modifiers: PoeItemModifier[];
+  kind: "implicit" | "explicit";
+}) {
+  if (!modifiers.length) return null;
+
+  return (
+    <section className="border-t border-[#77775b]/45 py-2 first:border-t-0 first:pt-0">
+      <h4 className="mb-1 text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-[#a7aa8b]">{title}</h4>
+      <div className="space-y-1">
+        {modifiers.map((modifier, index) => (
+          <div key={`${index}-${modifier.text}`} className={`break-words leading-5 ${modifierTone(modifier, kind)}`}>
+            <span>{modifier.text}</span>
+            {modifier.tags.length ? (
+              <span className="ml-1.5 inline-flex flex-wrap justify-center gap-1 align-middle">
+                {modifier.tags.map((tag) => (
+                  <span key={tag} className={`rounded-sm border px-1 py-0.5 text-[0.58rem] font-semibold uppercase leading-none tracking-wide ${modifierTagTone(tag)}`}>
+                    {modifierTagLabel(tag)}
+                  </span>
+                ))}
+              </span>
+            ) : null}
+          </div>
+        ))}
+      </div>
+    </section>
+  );
 }
 
-function itemLineTone(line: string) {
-  const normalized = line.toLocaleLowerCase();
-  if (normalized === "corrupted") return "font-semibold text-[#d96d6d]";
-  if (normalized.includes("{crafted}")) return "text-[#b8daf1]";
-  if (normalized.endsWith(":")) return "mt-1 font-medium text-[#9aa6b2]";
-  return "text-[#d7dde5]";
+function modifierTone(modifier: PoeItemModifier, kind: "implicit" | "explicit") {
+  if (modifier.tags.includes("fractured")) return "text-[#d8b56d]";
+  if (modifier.tags.includes("crafted")) return "text-[#b8daf1]";
+  if (modifier.tags.includes("enchant")) return "text-[#b6a7e8]";
+  return kind === "implicit" ? "text-[#9fc4ef]" : "text-[#d7dde5]";
+}
+
+function modifierTagLabel(tag: PoeItemModifierTag) {
+  const labels: Record<PoeItemModifierTag, string> = {
+    crafted: "Craftowany",
+    fractured: "Fractured",
+    enchant: "Enchant"
+  };
+  return labels[tag];
+}
+
+function modifierTagTone(tag: PoeItemModifierTag) {
+  const tones: Record<PoeItemModifierTag, string> = {
+    crafted: "border-[#7ca6c4]/60 bg-[#41657d]/25 text-[#b8daf1]",
+    fractured: "border-[#b58b42]/65 bg-[#6b5123]/25 text-[#e4bd74]",
+    enchant: "border-[#8072ad]/60 bg-[#5c4d83]/25 text-[#c2b5eb]"
+  };
+  return tones[tag];
+}
+
+function normalizeItemLine(line: string) {
+  return line.trim().toLocaleLowerCase();
 }
 
 function EquipmentIcon({ slot }: { slot: string }) {

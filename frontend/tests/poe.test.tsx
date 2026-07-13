@@ -81,6 +81,7 @@ describe("Path of Exile UI", () => {
 
   it("shows responsive final equipment details on hover, focus and tap", () => {
     const equipment = readProjectFile("components/poe/PoeEquipmentGrid.tsx");
+    const itemParser = readProjectFile("lib/poe-item.ts");
     const details = readProjectFile("app/poe/characters/[id]/page.tsx");
 
     expect(equipment).toContain("Końcowe wyposażenie");
@@ -93,7 +94,13 @@ describe("Path of Exile UI", () => {
     expect(equipment).toContain("onClick={() => setPinned");
     expect(equipment).toContain('type="button"');
     expect(equipment).toContain('event.key !== "Escape"');
-    expect(equipment).toContain('normalized.startsWith("unique id:")');
+    expect(equipment).toContain("parsePoeItemText(item)");
+    expect(equipment).toContain('title="Modyfikatory implicit"');
+    expect(equipment).toContain('title="Modyfikatory explicit"');
+    expect(equipment).toContain('crafted: "Craftowany"');
+    expect(equipment).toContain('fractured: "Fractured"');
+    expect(itemParser).toContain('normalizedRawLine.startsWith("unique id:")');
+    expect(itemParser).toContain("implicitModifiersRemaining");
     expect(equipment).toContain("overflow-x-hidden");
     expect(details).toContain("api.listPoeEquipment(id, signal)");
     expect(details).toContain("<PoeEquipmentGrid equipment={equipment} />");
