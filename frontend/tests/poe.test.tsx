@@ -93,6 +93,8 @@ describe("Path of Exile UI", () => {
     expect(equipment).toContain("onClick={() => setPinned");
     expect(equipment).toContain('type="button"');
     expect(equipment).toContain('event.key !== "Escape"');
+    expect(equipment).toContain('normalized.startsWith("unique id:")');
+    expect(equipment).toContain("overflow-x-hidden");
     expect(details).toContain("api.listPoeEquipment(id, signal)");
     expect(details).toContain("<PoeEquipmentGrid equipment={equipment} />");
   });
@@ -109,8 +111,10 @@ describe("Path of Exile UI", () => {
     expect(readProjectFile("app/poe/page.tsx")).toContain("onChanged={afterLeagueChanged}");
   });
 
-  it("uses the upgraded supported Next and React major versions", () => {
+  it("uses the upgraded supported frontend platform and CSS pipeline", () => {
     const packageJson = JSON.parse(readProjectFile("package.json"));
+    const styles = readProjectFile("app/globals.css");
+    const postcss = readProjectFile("postcss.config.mjs");
 
     expect(packageJson.dependencies.next).toMatch(/^\^16\./);
     expect(packageJson.dependencies.react).toMatch(/^\^19\./);
@@ -118,6 +122,13 @@ describe("Path of Exile UI", () => {
     expect(packageJson.dependencies.zod).toMatch(/^\^4\./);
     expect(packageJson.devDependencies.typescript).toMatch(/^\^6\./);
     expect(packageJson.devDependencies["@types/node"]).toMatch(/^\^24\./);
+    expect(packageJson.devDependencies.tailwindcss).toMatch(/^\^4\./);
+    expect(packageJson.devDependencies["@tailwindcss/postcss"]).toMatch(/^\^4\./);
+    expect(packageJson.devDependencies.autoprefixer).toBeUndefined();
+    expect(packageJson.dependencies["tailwindcss-animate"]).toBeUndefined();
+    expect(postcss).toContain('"@tailwindcss/postcss": {}');
+    expect(styles).toContain('@import "tailwindcss";');
+    expect(styles).toContain("@theme {");
     expect(packageJson.scripts.lint).toBe("eslint .");
   });
 });

@@ -86,7 +86,7 @@ Wersje zadeklarowane w plikach projektu i rozstrzygnięte przez lockfile:
 
 | Obszar | Technologie |
 | --- | --- |
-| Frontend | Next.js `16.2.10`, React/React DOM `19.2.7`, TypeScript `6.0.3`, Tailwind CSS `3.4.19` |
+| Frontend | Next.js `16.2.10`, React/React DOM `19.2.7`, TypeScript `6.0.3`, Tailwind CSS `4.3.2` z konfiguracją CSS-first |
 | UI i formularze | Lucide React 1, react-hook-form 7.81, Zod 4.4, komponenty lokalne inspirowane shadcn/ui |
 | Dane i wykresy | Recharts 3.9, dnd-kit core 6 / sortable 10 |
 | Backend | Python 3.14 w obrazie Docker, FastAPI `>=0.139.0`, SQLAlchemy `>=2.0.51`, Pydantic 2.13, Alembic, Uvicorn 0.51 |

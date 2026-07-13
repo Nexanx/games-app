@@ -256,12 +256,12 @@ function PoeItemTooltip({
         {item.base_type && item.base_type !== item.name ? <p className={`mt-0.5 text-base ${theme.title}`}>{item.base_type}</p> : null}
         <p className="mt-1 text-[0.65rem] uppercase tracking-[0.2em] text-white/55">{theme.label}</p>
       </div>
-      <div className="max-h-[calc(100vh-8rem)] overflow-y-auto px-5 py-3 text-sm leading-6 text-[#c8c8c8]">
+      <div className="max-h-[calc(100vh-8rem)] overflow-x-hidden overflow-y-auto px-5 py-3 text-sm leading-6 text-[#c8c8c8]">
         {lines.map((line, index) =>
           isDivider(line) ? (
             <div key={`${index}-${line}`} className="my-2 h-px bg-gradient-to-r from-transparent via-[#77775b]/75 to-transparent" />
           ) : (
-            <p key={`${index}-${line}`} className={itemLineTone(line)}>
+            <p key={`${index}-${line}`} className={`break-words ${itemLineTone(line)}`}>
               {line || "\u00a0"}
             </p>
           )
@@ -286,6 +286,7 @@ function itemDetails(item: PoeEquipmentItem) {
     const isInternal =
       !line ||
       normalized.startsWith("rarity:") ||
+      normalized.startsWith("unique id:") ||
       normalized === "new item" ||
       isIdentity ||
       /^(crafted|prefix|suffix):/i.test(line) ||

@@ -1,6 +1,38 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+@theme {
+  --color-border: hsl(220 16% 18%);
+  --color-input: hsl(220 16% 18%);
+  --color-ring: hsl(42 75% 55%);
+  --color-background: hsl(222 28% 8%);
+  --color-foreground: hsl(210 30% 96%);
+  --color-muted: hsl(220 18% 14%);
+  --color-muted-foreground: hsl(215 14% 68%);
+  --color-card: hsl(220 22% 11%);
+  --color-card-foreground: hsl(210 30% 96%);
+  --color-primary: hsl(159 72% 44%);
+  --color-primary-foreground: hsl(165 88% 6%);
+  --color-accent: hsl(42 68% 50%);
+  --color-accent-foreground: hsl(32 50% 8%);
+  --color-destructive: hsl(0 74% 58%);
+  --color-destructive-foreground: hsl(0 0% 100%);
+
+  --radius-lg: 0.5rem;
+  --radius-md: 0.375rem;
+  --radius-sm: 0.25rem;
+
+  --shadow-glow: 0 0 0 1px rgb(255 255 255 / 4%), 0 20px 60px rgb(0 0 0 / 35%);
+}
+
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-border, currentColor);
+  }
+}
 
 :root {
   color-scheme: dark;
