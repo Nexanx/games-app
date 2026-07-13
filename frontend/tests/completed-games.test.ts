@@ -5,6 +5,7 @@ import {
   completedYearFiltersToSearchParams,
   currentCompletedGamesYear,
   getAvailableYearNavigation,
+  getYearNavigation,
   groupCompletedGamesByMonth,
   hasCompletedYearFilters,
   todayAsInputValue
@@ -52,6 +53,16 @@ describe("completed games grouping", () => {
 
     expect(getAvailableYearNavigation(2026, years)).toEqual({ newerYear: null, olderYear: 2024 });
     expect(getAvailableYearNavigation(2024, years)).toEqual({ newerYear: 2026, olderYear: null });
+  });
+
+  it("selects the nearest available years around an empty year", () => {
+    const years = [
+      { year: 2027, completed_games_count: 2 },
+      { year: 2026, completed_games_count: 11 },
+      { year: 2024, completed_games_count: 3 }
+    ];
+
+    expect(getYearNavigation(2025, years)).toEqual({ newerYear: 2026, olderYear: 2024 });
   });
 
   it("uses the local calendar date as the default form value", () => {

@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   Bar, BarChart, CartesianGrid, Legend, Line, LineChart, Pie, PieChart,
   Scatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis
@@ -10,6 +10,7 @@ import { ResponsiveContainer } from "@/components/analytics/AnalyticsChartContai
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { replaceAnalyticsSearchParams } from "@/lib/analytics-sections";
 import { polishMonthNames } from "@/lib/completed-games";
 import { formatHours } from "@/lib/utils";
 import type { CompletedGamesDistributionItem, CompletedGamesYearDashboard } from "@/types";
@@ -25,10 +26,8 @@ const metrics: Array<{ value: Metric; label: string; unit: string }> = [
 ];
 
 export function AnalyticsTrends({ dashboard }: { dashboard: CompletedGamesYearDashboard }) {
-  const router = useRouter();
   const searchParams = useSearchParams();
-  const requestedMetric = searchParams.get("metric");
-  const metric: Metric = requestedMetric === "time" || requestedMetric === "rating" ? requestedMetric : "games";
+  const [metric, setMetric] = useState<Metric>(() => parseMetric(searchParams.get("metric")));
   const monthly = dashboard.monthly.map((item) => ({
     month: item.month,
     label: polishMonthNames[item.month - 1].slice(0, 3),
@@ -47,10 +46,8 @@ export function AnalyticsTrends({ dashboard }: { dashboard: CompletedGamesYearDa
   const selected = metrics.find((item) => item.value === metric) ?? metrics[0];
 
   function selectMetric(value: Metric) {
-    const params = new URLSearchParams(searchParams.toString());
-    params.set("section", "trends");
-    params.set("metric", value);
-    router.replace(`?${params.toString()}`, { scroll: false });
+    setMetric(value);
+    replaceAnalyticsSearchParams(searchParams, { section: "trends", metric: value });
   }
 
   return (
@@ -116,3 +113,4 @@ function formatMetric(value: number, metric: Metric) { if (metric === "time") re
 function formatNumber(value: number) { return new Intl.NumberFormat("pl-PL", { maximumFractionDigits: 2 }).format(value); }
 function NoData({ label }: { label: string }) { return <p className="rounded-md bg-muted p-4 text-sm text-muted-foreground">{label}</p>; }
 const tooltipStyle = { backgroundColor: "#020617", border: "1px solid #334155", borderRadius: "8px", color: "#f8fafc" };
+function parseMetric(value: string | null): Metric { return value === "time" || value === "rating" ? value : "games"; }

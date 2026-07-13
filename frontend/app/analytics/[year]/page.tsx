@@ -4,11 +4,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { CalendarCheck2, ChevronLeft, ChevronRight, Filter, Plus, RotateCcw, X } from "lucide-react";
+import { CalendarCheck2, Filter, Plus, RotateCcw, X } from "lucide-react";
 
 import { AnalyticsSectionNav } from "@/components/analytics/AnalyticsSectionNav";
 import { CompletedYearDashboard } from "@/components/games/CompletedYearDashboard";
 import { CompletedYearsComparison } from "@/components/games/CompletedYearsComparison";
+import { YearNavigation } from "@/components/games/YearNavigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -17,12 +18,12 @@ import { LoadingState } from "@/components/ui/LoadingState";
 import { Select } from "@/components/ui/select";
 import { analyticsPeriodLabel } from "@/lib/analytics";
 import { parseAnalyticsSection, type AnalyticsSection } from "@/lib/analytics-sections";
-import { completedYearFiltersFromSearchParams, completedYearFiltersToSearchParams, currentCompletedGamesYear, getAvailableYearNavigation, hasCompletedYearFilters, polishMonthNames, type CompletedYearFilters } from "@/lib/completed-games";
+import { completedYearFiltersFromSearchParams, completedYearFiltersToSearchParams, currentCompletedGamesYear, hasCompletedYearFilters, polishMonthNames, type CompletedYearFilters } from "@/lib/completed-games";
 import { api } from "@/services/api";
 import type { CompletedGamesComparison, CompletedGamesFilterOptions, CompletedGamesYear, CompletedGamesYearDashboard } from "@/types";
 
 const AnalyticsTrends = dynamic(() => import("@/components/analytics/AnalyticsTrends").then((module) => module.AnalyticsTrends), { ssr: false, loading: SectionLoading });
-const AnalyticsActivity = dynamic(() => import("@/components/analytics/AnalyticsActivity").then((module) => module.AnalyticsActivity), { ssr: false, loading: SectionLoading });
+const AnalyticsHeatmap = dynamic(() => import("@/components/analytics/AnalyticsHeatmap").then((module) => module.AnalyticsHeatmap), { ssr: false, loading: SectionLoading });
 const MonthComparison = dynamic(() => import("@/components/analytics/MonthComparison").then((module) => module.MonthComparison), { ssr: false, loading: SectionLoading });
 const ForecastSection = dynamic(() => import("@/components/analytics/ForecastSection").then((module) => module.ForecastSection), { ssr: false, loading: SectionLoading });
 const AnnualReport = dynamic(() => import("@/components/analytics/AnnualReport").then((module) => module.AnnualReport), { ssr: false, loading: SectionLoading });
@@ -35,11 +36,11 @@ export default function AnalyticsYearPage() {
   const searchParams = useSearchParams();
   const year = Number(yearParam);
   const validYear = Number.isInteger(year) && year >= 1900 && year <= 9998;
-  const filterQuery = searchParams.toString();
+  const filterQuery = completedYearFiltersToSearchParams(completedYearFiltersFromSearchParams(searchParams)).toString();
   const requestedSection = searchParams.get("section");
   const section: AnalyticsSection = parseAnalyticsSection(requestedSection);
   const needsDashboard = section === "summary" || section === "trends";
-  const filters = useMemo(() => completedYearFiltersFromSearchParams(searchParams), [filterQuery]); // eslint-disable-line react-hooks/exhaustive-deps
+  const filters = useMemo(() => completedYearFiltersFromSearchParams(new URLSearchParams(filterQuery)), [filterQuery]);
   const filtersActive = hasCompletedYearFilters(filters);
   const [years, setYears] = useState<CompletedGamesYear[]>([]);
   const [dashboard, setDashboard] = useState<CompletedGamesYearDashboard | null>(null);
@@ -67,7 +68,6 @@ export default function AnalyticsYearPage() {
   }, [filterQuery, filters.genres, filters.month, filters.platforms, filters.ratingMax, filters.ratingMin, needsDashboard, retryKey, validYear, year]);
 
   const availableYears = useMemo(() => { const current = years.find((item) => item.year === year); const candidates = current || !dashboard ? years : [{ year, completed_games_count: dashboard.completed_games_count }, ...years]; return [...candidates].sort((left, right) => right.year - left.year); }, [dashboard, year, years]);
-  const navigation = useMemo(() => getAnalyticsYearNavigation(year, years), [year, years]);
   const comparisonYearsKey = comparisonYears.join(",");
 
   useEffect(() => { if (section !== "summary" || comparisonInitialized.current || availableYears.length < 2) return; comparisonInitialized.current = true; setComparisonYears(availableYears.slice(0, 2).map((item) => item.year)); }, [availableYears, section]);
@@ -75,13 +75,12 @@ export default function AnalyticsYearPage() {
 
   if (!validYear) return <ErrorState message="Nieprawidłowy rok." />;
 
-  function updateFilters(nextFilters: CompletedYearFilters) { const params = completedYearFiltersToSearchParams(nextFilters); if (section !== "summary") params.set("section", section); router.replace(`/analytics/${year}${params.size ? `?${params}` : ""}`, { scroll: false }); }
+  function updateFilters(nextFilters: CompletedYearFilters) { const params = completedYearFiltersToSearchParams(nextFilters); if (section !== "summary") params.set("section", section); if (section === "trends" && searchParams.get("metric")) params.set("metric", searchParams.get("metric") as string); router.replace(`/analytics/${year}${params.size ? `?${params}` : ""}`, { scroll: false }); }
   function updateRating(bound: "ratingMin" | "ratingMax", raw: string) { const parsed = raw === "" ? undefined : Number(raw); const value = parsed !== undefined && Number.isFinite(parsed) && parsed >= 0 && parsed <= 10 ? parsed : undefined; const next = { ...filters, [bound]: value }; if (next.ratingMin !== undefined && next.ratingMax !== undefined && next.ratingMin > next.ratingMax) { if (bound === "ratingMin") next.ratingMax = undefined; else next.ratingMin = undefined; } updateFilters(next); }
   const yearHref = (target: number) => `/analytics/${target}${section === "summary" ? "" : `?section=${section}`}`;
 
   return <div className="min-w-0 space-y-6">
-    <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-sm font-semibold text-primary">Statystyki ukończeń</p><h1 className="mt-1 text-2xl font-bold sm:text-3xl">Analizy — {year}</h1><p className="mt-2 text-sm text-muted-foreground">{needsDashboard ? <>Aktywny okres: <strong className="text-foreground">{analyticsPeriodLabel(year, filters)}</strong>{filtersActive ? ` · ${activeFiltersCount(filters)} aktywne filtry` : ""}</> : "Wybierz sekcję, aby przeanalizować dane bez przeładowania głównej nawigacji."}</p></div><div className="flex flex-wrap gap-2"><Link href={`/completed-games/${year}`}><Button variant="secondary"><CalendarCheck2 className="h-4 w-4" aria-hidden="true" />Lista gier</Button></Link><Link href="/completed-games/new"><Button><Plus className="h-4 w-4" aria-hidden="true" />Dodaj grę</Button></Link></div></header>
-    <Card><CardContent className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between sm:p-4"><div className="flex flex-wrap gap-2">{navigation.olderYear ? <Link href={yearHref(navigation.olderYear)}><Button variant="secondary"><ChevronLeft className="h-4 w-4" aria-hidden="true" />Poprzedni rok ({navigation.olderYear})</Button></Link> : null}{navigation.newerYear ? <Link href={yearHref(navigation.newerYear)}><Button variant="secondary">Następny rok ({navigation.newerYear})<ChevronRight className="h-4 w-4" aria-hidden="true" /></Button></Link> : null}{year !== currentCompletedGamesYear() ? <Link href={yearHref(currentCompletedGamesYear())}><Button variant="ghost"><RotateCcw className="h-4 w-4" aria-hidden="true" />Bieżący rok</Button></Link> : null}</div><Select className="sm:w-52" value={String(year)} onChange={(event) => event.target.value && router.push(yearHref(Number(event.target.value)))} aria-label="Wybierz rok analiz">{!years.some((item) => item.year === year) ? <option value={year}>{year} (brak wpisów)</option> : null}{years.map((item) => <option key={item.year} value={item.year}>{item.year} ({item.completed_games_count})</option>)}</Select></CardContent></Card>
+    <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between"><div><p className="text-sm font-semibold text-primary">Statystyki ukończeń</p><h1 className="mt-1 text-2xl font-bold sm:text-3xl">Analizy — {year}</h1><p className="mt-2 text-sm text-muted-foreground">{needsDashboard ? <>Aktywny okres: <strong className="text-foreground">{analyticsPeriodLabel(year, filters)}</strong>{filtersActive ? ` · ${activeFiltersCount(filters)} aktywne filtry` : ""}</> : "Wybierz sekcję, aby przeanalizować zapisane ukończenia."}</p></div><div className="flex flex-col items-start gap-3 lg:items-end"><div className="flex flex-wrap gap-2"><Link href={`/completed-games/${year}`}><Button variant="secondary"><CalendarCheck2 className="h-4 w-4" aria-hidden="true" />Lista gier</Button></Link><Link href="/completed-games/new"><Button><Plus className="h-4 w-4" aria-hidden="true" />Dodaj grę</Button></Link></div><YearNavigation year={year} years={years} hrefForYear={yearHref} ariaLabel="Wybór roku analiz" currentCalendarYear={currentCompletedGamesYear()} /></div></header>
     <AnalyticsSectionNav year={year} active={section} />
     {needsDashboard ? <><Button type="button" variant={filtersActive ? "primary" : "secondary"} className="min-h-12 w-full justify-start" aria-expanded={filtersOpen} aria-controls="analytics-filters" onClick={() => setFiltersOpen((value) => !value)}><Filter className="h-5 w-5" aria-hidden="true" />Filtry analizy<span className="ml-auto text-xs font-normal">{filtersActive ? `${activeFiltersCount(filters)} aktywne` : filtersOpen ? "Ukryj" : "Pokaż"}</span></Button>{filtersOpen ? <AnalyticsFilters filters={filters} options={filterOptions} onChange={updateFilters} onRatingChange={updateRating} /> : null}</> : null}
     {loading ? <LoadingState label="Aktualizowanie analiz" /> : null}
@@ -89,7 +88,7 @@ export default function AnalyticsYearPage() {
     {!loading && !error && needsDashboard && dashboard?.completed_games_count === 0 ? <EmptyAnalysis year={year} filtersActive={filtersActive} onClear={() => updateFilters(emptyFilters)} /> : null}
     {!loading && !error && dashboard && dashboard.completed_games_count > 0 && section === "summary" ? <CompletedYearDashboard dashboard={dashboard} filters={filters} /> : null}
     {!loading && !error && dashboard && dashboard.completed_games_count > 0 && section === "trends" ? <AnalyticsTrends dashboard={dashboard} /> : null}
-    {section === "calendar" || section === "heatmap" ? <AnalyticsActivity year={year} mode={section} /> : null}
+    {section === "heatmap" ? <AnalyticsHeatmap year={year} /> : null}
     {section === "compare" ? <MonthComparison year={year} /> : null}
     {section === "forecast" ? <ForecastSection /> : null}
     {section === "report" ? <AnnualReport year={year} /> : null}
@@ -102,5 +101,4 @@ function AnalyticsFilters({ filters, options, onChange, onRatingChange }: { filt
 function FilterSelect({ label, value, options, onChange }: { label: string; value: string | number; options: Array<{label:string;value:string}>; onChange: (value:string)=>void }) { return <label className="space-y-1.5 text-sm"><span className="font-semibold">{label}</span><Select value={value} onChange={(event)=>onChange(event.target.value)}><option value="">Wszystkie</option>{options.map((item)=><option key={item.value} value={item.value}>{item.label}</option>)}</Select></label>; }
 function EmptyAnalysis({ year, filtersActive, onClear }: { year: number; filtersActive: boolean; onClear: () => void }) { return <Card className="border-dashed"><CardContent className="flex min-h-52 flex-col items-center justify-center gap-4 p-6 text-center"><div><p className="font-semibold">{filtersActive ? "Brak gier spełniających wybrane filtry" : `Brak ukończonych gier w ${year} roku.`}</p><p className="mt-1 text-sm text-muted-foreground">{filtersActive ? "Wyczyść filtry albo wybierz inne kryteria." : "Po dodaniu pierwszego ukończenia pojawią się tutaj statystyki i wykresy."}</p></div>{filtersActive ? <Button type="button" variant="secondary" onClick={onClear}><X className="h-4 w-4" aria-hidden="true" />Wyczyść filtry</Button> : null}</CardContent></Card>; }
 function activeFiltersCount(filters: CompletedYearFilters) { return Number(filters.month !== undefined) + filters.platforms.length + filters.genres.length + Number(filters.ratingMin !== undefined) + Number(filters.ratingMax !== undefined); }
-function getAnalyticsYearNavigation(year: number, years: CompletedGamesYear[]) { if (years.some((item) => item.year === year)) return getAvailableYearNavigation(year, years); const ordered = years.map((item) => item.year).sort((left, right) => right - left); return { newerYear: ordered.find((item) => item > year) ?? null, olderYear: ordered.find((item) => item < year) ?? null }; }
 function SectionLoading() { return <LoadingState label="Ładowanie sekcji analitycznej" />; }

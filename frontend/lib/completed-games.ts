@@ -100,6 +100,17 @@ function parseRating(value: string | null) {
   return Number.isFinite(parsed) && parsed >= 0 && parsed <= 10 ? parsed : undefined;
 }
 
+export function getYearNavigation(currentYear: number, years: CompletedGamesYear[]) {
+  if (years.some((item) => item.year === currentYear)) {
+    return getAvailableYearNavigation(currentYear, years);
+  }
+  const orderedYears = years.map((item) => item.year).sort((left, right) => right - left);
+  return {
+    newerYear: orderedYears.filter((item) => item > currentYear).at(-1) ?? null,
+    olderYear: orderedYears.find((item) => item < currentYear) ?? null
+  };
+}
+
 function parseMonth(value: string | null) {
   if (value === null || value.trim() === "") return undefined;
   const parsed = Number(value);

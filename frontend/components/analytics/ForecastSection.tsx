@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Area, AreaChart, CartesianGrid, Legend, Line, ReferenceLine, Tooltip, XAxis, YAxis } from "recharts";
 import { ResponsiveContainer } from "@/components/analytics/AnalyticsChartContainer";
 
@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { ErrorState } from "@/components/ui/ErrorState";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { Select } from "@/components/ui/select";
+import { replaceAnalyticsSearchParams } from "@/lib/analytics-sections";
 import { formatHours } from "@/lib/utils";
 import { api } from "@/services/api";
 import type { CompletedGamesForecast } from "@/types";
@@ -17,18 +18,16 @@ import type { CompletedGamesForecast } from "@/types";
 type Metric = "completed_games" | "playtime";
 
 export function ForecastSection() {
-  const router = useRouter();
   const searchParams = useSearchParams();
-  const metric: Metric = searchParams.get("forecastMetric") === "playtime" ? "playtime" : "completed_games";
-  const requestedAhead = Number(searchParams.get("monthsAhead"));
-  const monthsAhead = Number.isInteger(requestedAhead) && requestedAhead >= 1 && requestedAhead <= 12 ? requestedAhead : 6;
+  const [metric, setMetric] = useState<Metric>(() => searchParams.get("forecastMetric") === "playtime" ? "playtime" : "completed_games");
+  const [monthsAhead, setMonthsAhead] = useState(() => parseMonthsAhead(searchParams.get("monthsAhead")));
   const [data, setData] = useState<CompletedGamesForecast | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [retry, setRetry] = useState(0);
 
   useEffect(() => {
-    const controller = new AbortController(); setLoading(true); setError(null); setData(null);
+    const controller = new AbortController(); setLoading(true); setError(null);
     api.getCompletedGamesForecast(metric, monthsAhead, controller.signal)
       .then(setData)
       .catch((reason) => { if (!(reason instanceof DOMException && reason.name === "AbortError")) setError(reason instanceof Error ? reason.message : "Nie udało się przygotować prognozy."); })
@@ -36,17 +35,26 @@ export function ForecastSection() {
     return () => controller.abort();
   }, [metric, monthsAhead, retry]);
 
-  function update(key: string, value: string) { const params = new URLSearchParams(searchParams.toString()); params.set("section", "forecast"); params.set(key, value); router.replace(`?${params.toString()}`, { scroll: false }); }
+  function updateMetric(value: Metric) {
+    setMetric(value);
+    replaceAnalyticsSearchParams(searchParams, { section: "forecast", forecastMetric: value, monthsAhead: String(monthsAhead) });
+  }
+
+  function updateMonthsAhead(value: number) {
+    setMonthsAhead(value);
+    replaceAnalyticsSearchParams(searchParams, { section: "forecast", forecastMetric: metric, monthsAhead: String(value) });
+  }
 
   return <section className="space-y-6" aria-labelledby="forecast-heading">
     <div><p className="text-sm font-semibold text-primary">Szacunek oparty na historii</p><h2 id="forecast-heading" className="mt-1 text-2xl font-bold">Prognozy</h2></div>
     <Card><CardHeader><CardTitle>Parametry prognozy</CardTitle><CardDescription>Obliczenia są wykonywane dopiero po otwarciu tej sekcji. Prognoza nigdy nie obejmuje ocen ani konkretnych tytułów.</CardDescription></CardHeader><CardContent className="grid gap-4 sm:grid-cols-2">
-      <label className="space-y-1.5 text-sm"><span className="font-semibold">Metryka</span><Select value={metric} onChange={(event) => update("forecastMetric", event.target.value)}><option value="completed_games">Liczba ukończonych gier</option><option value="playtime">Łączny czas gry</option></Select></label>
-      <label className="space-y-1.5 text-sm"><span className="font-semibold">Horyzont</span><Select value={monthsAhead} onChange={(event) => update("monthsAhead", event.target.value)}>{[3,6,9,12].map((value) => <option key={value} value={value}>{value} miesięcy</option>)}</Select></label>
+      <label className="space-y-1.5 text-sm"><span className="font-semibold">Metryka</span><Select value={metric} onChange={(event) => updateMetric(event.target.value as Metric)}><option value="completed_games">Liczba ukończonych gier</option><option value="playtime">Łączny czas gry</option></Select></label>
+      <label className="space-y-1.5 text-sm"><span className="font-semibold">Horyzont</span><Select value={monthsAhead} onChange={(event) => updateMonthsAhead(Number(event.target.value))}>{[3,6,9,12].map((value) => <option key={value} value={value}>{value} miesięcy</option>)}</Select></label>
     </CardContent></Card>
-    {loading ? <LoadingState label="Ocena jakości danych i modeli" /> : null}
+    {loading && !data ? <LoadingState label="Ocena jakości danych i modeli" /> : null}
+    {loading && data ? <p className="text-sm text-muted-foreground" role="status">Aktualizowanie prognozy…</p> : null}
     {error ? <div className="space-y-3"><ErrorState message={error} /><Button variant="secondary" onClick={() => setRetry((value) => value + 1)}>Spróbuj ponownie</Button></div> : null}
-    {!loading && !error && data ? <ForecastResult data={data} /> : null}
+    {data ? <div aria-busy={loading}><ForecastResult data={data} /></div> : null}
   </section>;
 }
 
@@ -66,3 +74,4 @@ function HistoricalTable({ data, includeForecast = false }: { data: CompletedGam
 function Stat({ label, value }: { label: string; value: string }) { return <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">{label}</p><p className="mt-1 text-lg font-bold">{value}</p></CardContent></Card>; }
 function formatValue(value: number, metric: CompletedGamesForecast["metric"]) { return metric === "playtime" ? formatHours(value) : `${new Intl.NumberFormat("pl-PL", { maximumFractionDigits: 2 }).format(value)} gier`; }
 const tooltipStyle = { backgroundColor: "#020617", border: "1px solid #334155", borderRadius: "8px", color: "#f8fafc" };
+function parseMonthsAhead(value: string | null) { const parsed = Number(value); return Number.isInteger(parsed) && parsed >= 1 && parsed <= 12 ? parsed : 6; }

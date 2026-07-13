@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Bar, BarChart, CartesianGrid, Legend, PolarAngleAxis, PolarGrid, Radar, RadarChart, Tooltip, XAxis, YAxis } from "recharts";
 import { ResponsiveContainer } from "@/components/analytics/AnalyticsChartContainer";
 
@@ -13,7 +13,7 @@ import { ErrorState } from "@/components/ui/ErrorState";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { Select } from "@/components/ui/select";
 import { polishMonthNames } from "@/lib/completed-games";
-import { normalizePair, percentageChangeLabel } from "@/lib/analytics-sections";
+import { normalizePair, percentageChangeLabel, replaceAnalyticsSearchParams } from "@/lib/analytics-sections";
 import { formatHours } from "@/lib/utils";
 import { api } from "@/services/api";
 import type { CompletedGamesMonthComparison, CompletedGamesMonthPeriod, CompletedGamesPeriodDifference } from "@/types";
@@ -26,21 +26,18 @@ const metricLabels: Record<string, string> = {
 };
 
 export function MonthComparison({ year }: { year: number }) {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const defaultB = year === new Date().getFullYear() ? new Date().getMonth() + 1 : 12;
   const defaultA = Math.max(1, defaultB - 1);
-  const parsedA = Number(searchParams.get("monthA"));
-  const parsedB = Number(searchParams.get("monthB"));
-  const monthA = validMonth(parsedA) ? parsedA : defaultA;
-  const monthB = validMonth(parsedB) && parsedB !== monthA ? parsedB : defaultB === monthA ? Math.min(12, monthA + 1) : defaultB;
+  const [months, setMonths] = useState(() => initialMonths(searchParams, defaultA, defaultB));
+  const { monthA, monthB } = months;
   const [data, setData] = useState<CompletedGamesMonthComparison | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [retry, setRetry] = useState(0);
 
   useEffect(() => {
-    const controller = new AbortController(); setLoading(true); setError(null); setData(null);
+    const controller = new AbortController(); setLoading(true); setError(null);
     api.compareCompletedMonths(year, monthA, monthB, controller.signal)
       .then(setData)
       .catch((reason) => { if (!(reason instanceof DOMException && reason.name === "AbortError")) setError(reason instanceof Error ? reason.message : "Nie udało się porównać miesięcy."); })
@@ -49,7 +46,9 @@ export function MonthComparison({ year }: { year: number }) {
   }, [monthA, monthB, retry, year]);
 
   function setMonth(key: "monthA" | "monthB", value: number) {
-    const params = new URLSearchParams(searchParams.toString()); params.set("section", "compare"); params.set(key, String(value)); router.replace(`?${params.toString()}`, { scroll: false });
+    const next = { ...months, [key]: value };
+    setMonths(next);
+    replaceAnalyticsSearchParams(searchParams, { section: "compare", monthA: String(next.monthA), monthB: String(next.monthB) });
   }
 
   return <section className="space-y-6" aria-labelledby="month-comparison-heading">
@@ -58,9 +57,10 @@ export function MonthComparison({ year }: { year: number }) {
       <label className="space-y-1.5 text-sm"><span className="font-semibold">Pierwszy miesiąc</span><Select value={monthA} onChange={(event) => setMonth("monthA", Number(event.target.value))}>{polishMonthNames.map((label, index) => <option key={label} value={index + 1} disabled={index + 1 === monthB}>{label}</option>)}</Select></label>
       <label className="space-y-1.5 text-sm"><span className="font-semibold">Drugi miesiąc</span><Select value={monthB} onChange={(event) => setMonth("monthB", Number(event.target.value))}>{polishMonthNames.map((label, index) => <option key={label} value={index + 1} disabled={index + 1 === monthA}>{label}</option>)}</Select></label>
     </CardContent></Card>
-    {loading ? <LoadingState label="Porównywanie miesięcy" /> : null}
+    {loading && !data ? <LoadingState label="Porównywanie miesięcy" /> : null}
+    {loading && data ? <p className="text-sm text-muted-foreground" role="status">Aktualizowanie porównania…</p> : null}
     {error ? <div className="space-y-3"><ErrorState message={error} /><Button variant="secondary" onClick={() => setRetry((value) => value + 1)}>Spróbuj ponownie</Button></div> : null}
-    {!loading && !error && data ? <ComparisonContent data={data} /> : null}
+    {data ? <div aria-busy={loading}><ComparisonContent data={data} /></div> : null}
   </section>;
 }
 
@@ -92,4 +92,11 @@ function formatDifferenceValue(value: number | null | undefined, metric: string)
 function formatSigned(value: number | null | undefined, metric: string) { if (value == null) return "Brak danych"; const prefix = value > 0 ? "+" : value < 0 ? "−" : ""; if (metric.includes("playtime") || metric === "total_playtime_hours") return `${prefix}${formatHours(Math.abs(value))}`; return `${value > 0 ? "+" : ""}${formatNumber(value)}`; }
 function formatNumber(value: number) { return new Intl.NumberFormat("pl-PL", { maximumFractionDigits: 2 }).format(value); }
 function validMonth(value: number) { return Number.isInteger(value) && value >= 1 && value <= 12; }
+function initialMonths(searchParams: Pick<URLSearchParams, "get">, defaultA: number, defaultB: number) {
+  const parsedA = Number(searchParams.get("monthA"));
+  const parsedB = Number(searchParams.get("monthB"));
+  const monthA = validMonth(parsedA) ? parsedA : defaultA;
+  const monthB = validMonth(parsedB) && parsedB !== monthA ? parsedB : defaultB === monthA ? Math.min(12, monthA + 1) : defaultB;
+  return { monthA, monthB };
+}
 const tooltipStyle = { backgroundColor: "#020617", border: "1px solid #334155", borderRadius: "8px", color: "#f8fafc" };

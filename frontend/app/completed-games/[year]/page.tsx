@@ -3,9 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, ChevronLeft, ChevronRight, Filter, Plus, X } from "lucide-react";
+import { Filter, Plus, X } from "lucide-react";
 
 import { CompletedGameCard } from "@/components/games/CompletedGameCard";
+import { YearNavigation } from "@/components/games/YearNavigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -16,7 +17,7 @@ import { Select } from "@/components/ui/select";
 import {
   completedYearFiltersFromSearchParams,
   completedYearFiltersToSearchParams,
-  getAvailableYearNavigation,
+  currentCompletedGamesYear,
   groupCompletedGamesByMonth,
   hasCompletedYearFilters,
   type CompletedYearFilters
@@ -119,7 +120,7 @@ export default function CompletedGamesYearPage() {
   }, [validYear, year]);
 
   const monthGroups = useMemo(() => groupCompletedGamesByMonth(entries), [entries]);
-  const navigation = useMemo(() => getYearNavigation(year, years), [year, years]);
+  const completedCount = dashboard?.completed_games_count ?? years.find((item) => item.year === year)?.completed_games_count;
 
   if (!validYear) return <ErrorState message="Nieprawidłowy rok." />;
   if (metadataLoading && entriesLoading && !dashboard) {
@@ -150,35 +151,17 @@ export default function CompletedGamesYearPage() {
 
   return (
     <div className="space-y-6">
-      <header className="space-y-4">
-        <Link href="/completed-games/years" className="inline-flex min-h-11 items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
-          <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Inne lata
-        </Link>
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-sm font-semibold text-primary">Historia roczna</p>
-            <h1 className="mt-1 text-2xl font-bold sm:text-3xl">Ukończone gry — {year}</h1>
-            {filtersActive ? <p className="mt-2 text-sm text-muted-foreground">Znaleziono po filtrach: {entries.length}</p> : null}
-          </div>
+      <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="text-sm font-semibold text-primary">Historia roczna</p>
+          <h1 className="mt-1 text-2xl font-bold sm:text-3xl">Ukończone gry — {year}</h1>
+          <p className="mt-2 text-sm text-muted-foreground">{completedCount == null ? "Ładowanie liczby ukończeń…" : completedGamesLabel(completedCount)}{filtersActive ? ` · po filtrach: ${entries.length}` : ""}</p>
+        </div>
+        <div className="flex flex-col items-start gap-3 lg:items-end">
           <Link href="/completed-games/new"><Button><Plus className="h-4 w-4" aria-hidden="true" />Dodaj grę</Button></Link>
+          <YearNavigation year={year} years={years} hrefForYear={(target) => `/completed-games/${target}`} ariaLabel="Wybór roku ukończonych gier" currentCalendarYear={currentCompletedGamesYear()} />
         </div>
       </header>
-
-      <Card>
-        <CardContent className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between sm:p-4">
-          <div className="flex flex-wrap gap-2">
-            {navigation.olderYear ? <Link href={`/completed-games/${navigation.olderYear}`}><Button variant="secondary"><ChevronLeft className="h-4 w-4" aria-hidden="true" />Poprzedni rok ({navigation.olderYear})</Button></Link> : null}
-            {navigation.newerYear ? <Link href={`/completed-games/${navigation.newerYear}`}><Button variant="secondary">Następny rok ({navigation.newerYear})<ChevronRight className="h-4 w-4" aria-hidden="true" /></Button></Link> : null}
-          </div>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <Link href="/completed-games/years"><Button variant="ghost">Inne lata</Button></Link>
-            <Select className="sm:w-52" value={String(year)} onChange={(event) => event.target.value && router.push(`/completed-games/${event.target.value}`)} aria-label="Wybierz inny rok">
-              {!years.some((item) => item.year === year) ? <option value={year}>{year} (brak wpisów)</option> : null}
-              {years.map((item) => <option key={item.year} value={item.year}>{item.year} ({item.completed_games_count})</option>)}
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
 
       {metadataError ? <ErrorState message={metadataError} /> : null}
       <Button
@@ -298,17 +281,7 @@ function getActiveFiltersCount(filters: CompletedYearFilters) {
     + Number(filters.ratingMax !== undefined);
 }
 
-function getYearNavigation(year: number, years: CompletedGamesYear[]) {
-  if (years.some((item) => item.year === year)) {
-    return getAvailableYearNavigation(year, years);
-  }
-
-  const ordered = [...years].map((item) => item.year).sort((left, right) => right - left);
-  return {
-    newerYear: ordered.find((item) => item > year) ?? null,
-    olderYear: ordered.find((item) => item < year) ?? null
-  };
-}
+function completedGamesLabel(count: number) { return count === 1 ? "1 ukończona gra" : `${count} ukończonych gier`; }
 
 function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;

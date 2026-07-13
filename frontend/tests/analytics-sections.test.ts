@@ -1,12 +1,28 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { allYearDateKeys, analyticsSectionUrl, heatIntensityLevel, normalizePair, parseAnalyticsSection, percentageChangeLabel } from "../lib/analytics-sections";
+import { allYearDateKeys, analyticsSections, analyticsSectionUrl, heatIntensityLevel, normalizePair, parseAnalyticsSection, percentageChangeLabel, replaceAnalyticsSearchParams } from "../lib/analytics-sections";
+
+afterEach(() => vi.unstubAllGlobals());
 
 describe("analytics sections", () => {
   it("keeps supported sections in shareable URLs and falls back to summary", () => {
     expect(parseAnalyticsSection("heatmap")).toBe("heatmap");
+    expect(parseAnalyticsSection("calendar")).toBe("summary");
     expect(parseAnalyticsSection("unknown")).toBe("summary");
+    expect(analyticsSections).toEqual(["summary", "trends", "heatmap", "compare", "forecast", "report"]);
     expect(analyticsSectionUrl(2026, "compare", new URLSearchParams("monthA=7&monthB=8"))).toBe("/analytics/2026?monthA=7&monthB=8&section=compare");
+  });
+
+  it("replaces local analytics parameters without navigation or scrolling", () => {
+    const replaceState = vi.fn();
+    const scrollTo = vi.fn();
+    vi.stubGlobal("window", { history: { state: { route: "analytics" }, replaceState }, scrollTo });
+
+    const url = replaceAnalyticsSearchParams(new URLSearchParams("section=trends&metric=games"), { metric: "time" });
+
+    expect(url).toBe("?section=trends&metric=time");
+    expect(replaceState).toHaveBeenCalledWith({ route: "analytics" }, "", "?section=trends&metric=time");
+    expect(scrollTo).not.toHaveBeenCalled();
   });
 
   it("includes leap day in annual activity", () => {

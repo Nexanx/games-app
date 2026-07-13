@@ -1,4 +1,4 @@
-export const analyticsSections = ["summary", "trends", "calendar", "heatmap", "compare", "forecast", "report"] as const;
+export const analyticsSections = ["summary", "trends", "heatmap", "compare", "forecast", "report"] as const;
 export type AnalyticsSection = typeof analyticsSections[number];
 
 export function parseAnalyticsSection(value: string | null): AnalyticsSection {
@@ -11,6 +11,20 @@ export function analyticsSectionUrl(year: number, section: AnalyticsSection, sou
   else params.set("section", section);
   const query = params.toString();
   return `/analytics/${year}${query ? `?${query}` : ""}`;
+}
+
+export function replaceAnalyticsSearchParams(
+  source: Pick<URLSearchParams, "toString">,
+  updates: Record<string, string | null>
+) {
+  const params = new URLSearchParams(source.toString());
+  Object.entries(updates).forEach(([key, value]) => {
+    if (value === null) params.delete(key);
+    else params.set(key, value);
+  });
+  const url = `?${params.toString()}`;
+  window.history.replaceState(window.history.state, "", url);
+  return url;
 }
 
 export function allYearDateKeys(year: number) {
