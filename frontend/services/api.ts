@@ -29,6 +29,7 @@ import type {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api";
 const DEFAULT_TIMEOUT_MS = 15_000;
+const CHATBOT_TIMEOUT_MS = 75_000;
 
 type QueryScalar = string | number | boolean;
 type QueryValue = QueryScalar | QueryScalar[] | null | undefined;
@@ -238,7 +239,8 @@ export const api = {
   chat: (message: string, session_id?: number) =>
     request<{ session_id: number; answer: string; message: ChatMessage }>("/chat", {
       method: "POST",
-      body: JSON.stringify({ message, session_id })
+      body: JSON.stringify({ message, session_id }),
+      timeoutMs: CHATBOT_TIMEOUT_MS
     }),
   chatStatus: () => request<ChatStatus>("/chat/status"),
   listChatSessions: () => request<ChatSession[]>("/chat/sessions"),

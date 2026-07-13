@@ -218,6 +218,10 @@ def test_llm_timeout_setting_must_be_positive():
         Settings(llm_request_timeout_seconds=0)
 
 
+def test_llm_timeout_defaults_to_sixty_seconds():
+    assert Settings.model_fields["llm_request_timeout_seconds"].default == 60.0
+
+
 def test_chat_provider_error_returns_safe_contract_and_rolls_back(client, db_session, monkeypatch, caplog):
     monkeypatch.setattr(
         chat_api,

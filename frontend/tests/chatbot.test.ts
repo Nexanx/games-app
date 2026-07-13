@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   canSendChatMessage,
@@ -6,6 +6,12 @@ import {
   getChatbotErrorDetails,
   getChatbotErrorMessage
 } from "../lib/chatbot";
+import { api } from "../services/api";
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
 
 describe("chatbot UI helpers", () => {
   it("allows sending only non-empty messages when chatbot is configured and idle", () => {
@@ -49,5 +55,29 @@ describe("chatbot UI helpers", () => {
       errorId: "timeout-42",
       message: "Model nie odpowiedział w wymaganym czasie. Spróbuj ponownie."
     });
+  });
+});
+
+describe("chatbot API", () => {
+  it("allows the chatbot more time than regular API requests", async () => {
+    const setTimeoutMock = vi.fn(() => 1);
+    const clearTimeoutMock = vi.fn();
+    vi.stubGlobal("window", { setTimeout: setTimeoutMock, clearTimeout: clearTimeoutMock });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      session_id: 7,
+      answer: "Gotowe",
+      message: {
+        id: 11,
+        session_id: 7,
+        role: "assistant",
+        content: "Gotowe",
+        created_at: "2026-07-13T00:00:00Z"
+      }
+    }), { status: 200, headers: { "Content-Type": "application/json" } })));
+
+    await api.chat("Podsumuj moje gry");
+
+    expect(setTimeoutMock).toHaveBeenCalledWith(expect.any(Function), 75_000);
+    expect(clearTimeoutMock).toHaveBeenCalledWith(1);
   });
 });

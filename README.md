@@ -76,10 +76,10 @@ OPENAI_MODEL=gemini-3.5-flash
 Limit oczekiwania na odpowiedź modelu ustawisz bez zapisywania go w kodzie:
 
 ```env
-LLM_REQUEST_TIMEOUT_SECONDS=30
+LLM_REQUEST_TIMEOUT_SECONDS=60
 ```
 
-Wartość musi być dodatnia (maksymalnie `120` sekund). `POST /api/chat` zwraca bezpieczne szczegóły błędu w polu `detail`: kod, komunikat dla użytkownika i `error_id`, który można odnaleźć w logach backendu. Obsługiwane kody to `llm_not_configured`, `llm_auth_error`, `llm_timeout`, `llm_rate_limited`, `llm_provider_unavailable`, `llm_network_error`, `llm_invalid_response` oraz `llm_internal_error`. Odpowiedzi i logi nie zawierają kluczy API, nagłówków uwierzytelniających ani surowych odpowiedzi dostawcy.
+Wartość musi być dodatnia (maksymalnie `120` sekund). Frontend czeka na odpowiedź chatbota do `75` sekund, czyli dłużej niż domyślny limit backendu, aby backend zdążył zwrócić kontrolowany błąd dostawcy. `POST /api/chat` zwraca bezpieczne szczegóły błędu w polu `detail`: kod, komunikat dla użytkownika i `error_id`, który można odnaleźć w logach backendu. Obsługiwane kody to `llm_not_configured`, `llm_auth_error`, `llm_timeout`, `llm_rate_limited`, `llm_provider_unavailable`, `llm_network_error`, `llm_invalid_response` oraz `llm_internal_error`. Odpowiedzi i logi nie zawierają kluczy API, nagłówków uwierzytelniających ani surowych odpowiedzi dostawcy.
 
 ## Uruchomienie
 
