@@ -39,4 +39,14 @@ describe("application UI configuration", () => {
     expect(hrefs).toContain("/analytics");
     expect(navItems).toHaveLength(6);
   });
+
+  it("uses one controlled form submission for RAWG search", () => {
+    const search = readProjectFile("components/games/GameSearch.tsx");
+
+    expect(search).toContain("onSubmit={(event) => {");
+    expect(search).toContain("event.preventDefault();");
+    expect(search).toContain('<Button\n            type="submit"');
+    expect(search).not.toContain('onKeyDown={(event) => event.key === "Enter" && startSearch()}');
+    expect(search).toContain('<Button type="button" onClick={addSelected}');
+  });
 });

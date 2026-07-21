@@ -9,6 +9,7 @@ import { GameCover } from "@/components/games/GameCover";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { buildAnalyticsInsights } from "@/lib/analytics";
 import { completedYearFiltersToSearchParams, polishMonthNames, type CompletedYearFilters } from "@/lib/completed-games";
+import { metacriticValueLabel } from "@/lib/external-ratings";
 import { asDate, formatHours } from "@/lib/utils";
 import type { CompletedGameHighlight, CompletedGamesDistributionItem, CompletedGamesYearDashboard } from "@/types";
 
@@ -35,7 +36,7 @@ export function CompletedYearDashboard({
         <StatCard label="Ukończone gry" value={dashboard.completed_games_count} helper="W wybranym okresie" icon={Gamepad2} accent="text-emerald-300" />
         <StatCard label="Łączny czas gry" value={dashboard.games_with_playtime_count ? formatHours(dashboard.total_playtime_hours) : "Brak danych"} helper={timeContext} icon={Timer} accent="text-amber-300" />
         <StatCard label="Średni czas jednej gry" value={dashboard.average_playtime_hours == null ? "Brak danych" : formatHours(dashboard.average_playtime_hours)} helper={timeContext} icon={Clock3} accent="text-cyan-300" />
-        <StatCard label="Średnia ocena" value={dashboard.average_rating == null ? "Brak ocen" : `${formatNumber(dashboard.average_rating)}/10`} helper={dashboard.rated_games_count ? `${dashboard.rated_games_count} ocenionych wpisów` : undefined} icon={Star} accent="text-yellow-300" />
+        <StatCard label="Średnia moich ocen" value={dashboard.average_rating == null ? "Brak ocen" : `${formatNumber(dashboard.average_rating)}/10`} helper={dashboard.rated_games_count ? `${dashboard.rated_games_count} ocenionych wpisów` : undefined} icon={Star} accent="text-yellow-300" />
         <StatCard label="Najlepiej oceniona gra" value={dashboard.best_rated_game?.title ?? "Brak ocen"} helper={dashboard.best_rated_game?.rating == null ? undefined : `${formatNumber(dashboard.best_rated_game.rating)}/10`} icon={Trophy} accent="text-violet-300" />
         <StatCard label="Najbardziej aktywny miesiąc" value={dashboard.most_active_month ? polishMonthNames[dashboard.most_active_month.month - 1] : "Brak danych"} helper={dashboard.most_active_month ? completionCountLabel(dashboard.most_active_month.completed_games_count) : undefined} icon={CalendarDays} accent="text-primary" />
       </div>
@@ -82,7 +83,7 @@ function RankingCard({ title, entries, metric, empty }: { title: string; entries
 }
 
 function RankingList({ entries, metric }: { entries: CompletedGameHighlight[]; metric?: (entry: CompletedGameHighlight) => string }) {
-  return <ol className="space-y-2">{entries.map((entry, index) => <li key={entry.id}><Link href={`/completed-games/entry/${entry.id}`} className="grid min-h-14 grid-cols-[1.5rem_2rem_1fr_auto] items-center gap-2 rounded-md border border-border bg-background/45 p-2 text-sm transition hover:border-accent/70"><span className="text-center font-bold text-muted-foreground">{index + 1}</span><GameCover src={entry.cover_url} title={entry.title} alt="" variant="thumbnail" className="w-8" /><span className="min-w-0"><span className="block truncate font-semibold">{entry.title}</span><span className="block text-xs text-muted-foreground">{asDate(entry.completion_date)}</span></span>{metric ? <span className="shrink-0 font-semibold text-accent">{metric(entry)}</span> : null}</Link></li>)}</ol>;
+  return <ol className="space-y-2">{entries.map((entry, index) => <li key={entry.id}><Link href={`/completed-games/entry/${entry.id}`} className="grid min-h-14 grid-cols-[1.5rem_2rem_1fr_auto] items-center gap-2 rounded-md border border-border bg-background/45 p-2 text-sm transition hover:border-accent/70"><span className="text-center font-bold text-muted-foreground">{index + 1}</span><GameCover src={entry.cover_url} title={entry.title} alt="" variant="thumbnail" className="w-8" /><span className="min-w-0"><span className="block truncate font-semibold">{entry.title}</span><span className="block text-xs text-muted-foreground">{asDate(entry.completion_date)} · Metacritic: {metacriticValueLabel(entry.external_ratings)}</span></span>{metric ? <span className="shrink-0 font-semibold text-accent">{metric(entry)}</span> : null}</Link></li>)}</ol>;
 }
 
 function formatNumber(value: number) { return new Intl.NumberFormat("pl-PL", { maximumFractionDigits: 2 }).format(value); }

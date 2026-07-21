@@ -1,5 +1,5 @@
 from app.api.games import _merge_provider_data, _select_cover_result
-from app.schemas.games import GameSearchResult
+from app.schemas.games import ExternalRating, GameSearchResult
 
 
 def test_select_cover_result_prefers_exact_title_match() -> None:
@@ -27,6 +27,8 @@ def test_merge_provider_data_fills_missing_manual_fields() -> None:
         "external_id": None,
         "external_source": "manual",
         "external_url": None,
+        "external_ratings": [],
+        "external_ratings_updated_at": None,
     }
     result = GameSearchResult(
         title="Hades",
@@ -36,6 +38,7 @@ def test_merge_provider_data_fills_missing_manual_fields() -> None:
         external_id="123",
         external_source="RAWG",
         external_url="https://rawg.io/games/hades",
+        external_ratings=[ExternalRating(source="RAWG", value=4.4, scale=5, count=123)],
     )
 
     merged = _merge_provider_data(data, result)
@@ -46,3 +49,4 @@ def test_merge_provider_data_fills_missing_manual_fields() -> None:
     assert merged["external_id"] == "123"
     assert merged["external_source"] == "RAWG"
     assert merged["external_url"] == "https://rawg.io/games/hades"
+    assert merged["external_ratings"] == [{"source": "RAWG", "value": 4.4, "scale": 5.0, "count": 123}]

@@ -1,6 +1,13 @@
 export type PoeVersion = "poe1" | "poe2";
 export type StatisticValueType = "text" | "number" | "boolean";
 
+export interface ExternalRating {
+  source: "RAWG" | "Metacritic";
+  value: number;
+  scale: number;
+  count?: number | null;
+}
+
 export interface Game {
   id: number;
   title: string;
@@ -12,6 +19,8 @@ export interface Game {
   external_id?: string | null;
   external_source: string;
   external_url?: string | null;
+  external_ratings?: ExternalRating[];
+  external_ratings_updated_at?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -88,6 +97,7 @@ export interface CompletedGameHighlight {
   cover_url?: string | null;
   platform?: string | null;
   genres?: string[];
+  external_ratings?: ExternalRating[];
 }
 
 export interface CompletedGamesMonthSummary {
@@ -379,6 +389,7 @@ export interface DashboardBacklogEntry {
   cover_url?: string | null;
   preferred_platform?: string | null;
   note?: string | null;
+  external_ratings?: ExternalRating[];
 }
 
 export interface DashboardCompletedGame {
@@ -388,6 +399,7 @@ export interface DashboardCompletedGame {
   completion_date: string;
   playtime_hours: number;
   rating?: number | null;
+  external_ratings?: ExternalRating[];
 }
 
 export interface DashboardPoeSummary {

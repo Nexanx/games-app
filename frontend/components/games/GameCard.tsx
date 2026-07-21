@@ -6,6 +6,7 @@ import { ArrowDown, ArrowUp, Check, ExternalLink, GripVertical, Pencil, Trash2 }
 import { GameCover } from "@/components/games/GameCover";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { metacriticValueLabel } from "@/lib/external-ratings";
 import type { BacklogEntry } from "@/types";
 
 export function GameCard({
@@ -52,10 +53,11 @@ export function GameCard({
             </div>
           </div>
 
-          <div className="grid gap-2 text-sm sm:grid-cols-3">
+          <div className="grid gap-2 text-sm sm:grid-cols-2 xl:grid-cols-4">
             <Metric label="Kolejność" value={String(entry.position + 1)} />
             <Metric label="Platforma" value={entry.preferred_platform || entry.game.platforms[0] || "-"} />
             <Metric label="Gatunek" value={entry.game.genres.join(", ") || "-"} />
+            <Metric label="Metacritic" value={metacriticValueLabel(entry.game.external_ratings)} />
           </div>
 
           <div className="flex flex-wrap gap-2">
@@ -102,7 +104,7 @@ function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-md bg-background/60 p-3">
       <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="mt-1 truncate font-semibold">{value}</p>
+      <p className="mt-1 break-words font-semibold">{value}</p>
     </div>
   );
 }

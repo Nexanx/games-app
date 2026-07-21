@@ -6,10 +6,12 @@ import Link from "next/link";
 import { ArrowLeft, Pencil, Trash2 } from "lucide-react";
 
 import { GameCover } from "@/components/games/GameCover";
+import { ExternalRatings } from "@/components/games/ExternalRatings";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { LoadingState } from "@/components/ui/LoadingState";
+import { metacriticValueLabel } from "@/lib/external-ratings";
 import { asDate, formatHours } from "@/lib/utils";
 import { api } from "@/services/api";
 import type { CompletedGameEntry } from "@/types";
@@ -33,7 +35,7 @@ export default function CompletedGameDetailsPage() {
         <GameCover src={entry.game.cover_url} title={entry.game.title} variant="detail" className="rounded-lg" />
         <div className="space-y-4">
           <header><h1 className="text-2xl font-bold sm:text-3xl">{entry.game.title}</h1><p className="mt-2 text-sm text-muted-foreground">Ukończono {asDate(entry.completion_date)}</p></header>
-          <Card><CardContent className="grid gap-3 p-4 sm:grid-cols-3"><Metric label="Czas gry" value={formatHours(entry.playtime_hours)} /><Metric label="Ocena" value={entry.rating == null ? "Bez oceny" : `${entry.rating}/10`} /><Metric label="Platforma" value={entry.platform || "Brak"} /></CardContent></Card>
+          <Card><CardContent className="space-y-4 p-4"><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><Metric label="Czas gry" value={formatHours(entry.playtime_hours)} /><Metric label="Moja ocena" value={entry.rating == null ? "Bez oceny" : `${entry.rating}/10`} /><Metric label="Platforma" value={entry.platform || "Brak"} /><Metric label="Metacritic" value={metacriticValueLabel(entry.game.external_ratings)} /></div><div className="border-t border-border pt-4"><ExternalRatings ratings={entry.game.external_ratings} updatedAt={entry.game.external_ratings_updated_at} sources={["RAWG"]} /></div></CardContent></Card>
           {entry.review ? <Card><CardHeader><CardTitle>Notatka lub recenzja</CardTitle></CardHeader><CardContent><p className="whitespace-pre-wrap text-sm leading-6 text-muted-foreground">{entry.review}</p></CardContent></Card> : null}
           <div className="flex flex-wrap gap-2">
             <Link href={`/completed-games/entry/${entry.id}/edit`}><Button><Pencil className="h-4 w-4" aria-hidden="true" />Edytuj</Button></Link>

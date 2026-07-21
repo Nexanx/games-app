@@ -38,6 +38,8 @@ class Game(Base, TimestampMixin):
     external_id: Mapped[str | None] = mapped_column(String(255), index=True)
     external_source: Mapped[str] = mapped_column(String(50), default="manual", nullable=False)
     external_url: Mapped[str | None] = mapped_column(String(1000))
+    external_ratings: Mapped[list[dict]] = mapped_column(JSON, default=list, nullable=False)
+    external_ratings_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     __table_args__ = (
         Index(
             "ix_games_external_identity_normalized",

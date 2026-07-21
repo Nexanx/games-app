@@ -7,15 +7,15 @@ from app.services import dashboard_service
 from app.services.dashboard_service import build_dashboard_summary
 
 
-def add_game(db_session, title: str, *, cover_url: str | None = None) -> Game:
-    game = Game(title=title, cover_url=cover_url, genres=["RPG"], platforms=["PC"], external_source="manual")
+def add_game(db_session, title: str, *, cover_url: str | None = None, external_ratings: list[dict] | None = None) -> Game:
+    game = Game(title=title, cover_url=cover_url, genres=["RPG"], platforms=["PC"], external_source="manual", external_ratings=external_ratings or [])
     db_session.add(game)
     db_session.flush()
     return game
 
 
 def test_dashboard_summary_uses_current_year_and_backlog_order(db_session):
-    current = add_game(db_session, "Current Game", cover_url="https://example.com/current.jpg")
+    current = add_game(db_session, "Current Game", cover_url="https://example.com/current.jpg", external_ratings=[{"source": "Metacritic", "value": 88, "scale": 100, "count": None}])
     unrated = add_game(db_session, "Unrated Game")
     older = add_game(db_session, "Older Game")
     db_session.add_all([
@@ -25,7 +25,7 @@ def test_dashboard_summary_uses_current_year_and_backlog_order(db_session):
     ])
 
     later = add_game(db_session, "Later in queue")
-    first = add_game(db_session, "First in queue", cover_url="https://example.com/first.jpg")
+    first = add_game(db_session, "First in queue", cover_url="https://example.com/first.jpg", external_ratings=[{"source": "Metacritic", "value": 79, "scale": 100, "count": None}])
     db_session.add_all([
         BacklogEntry(game_id=later.id, position=4),
         BacklogEntry(game_id=first.id, position=0, preferred_platform="PC", note="Najpierw ta"),
@@ -45,7 +45,9 @@ def test_dashboard_summary_uses_current_year_and_backlog_order(db_session):
     assert [item.month for item in summary.games.current_year.trend] == [2, 3, 4, 5, 6, 7]
     assert [item.title for item in summary.games.next_backlog_entries] == ["First in queue", "Later in queue"]
     assert summary.games.next_backlog_entries[0].note == "Najpierw ta"
+    assert summary.games.next_backlog_entries[0].external_ratings[0].value == 79
     assert [item.title for item in summary.games.recent_completed_games][:2] == ["Current Game", "Unrated Game"]
+    assert summary.games.recent_completed_games[0].external_ratings[0].value == 88
 
 
 def test_dashboard_keeps_poe_as_a_compact_secondary_summary(db_session):

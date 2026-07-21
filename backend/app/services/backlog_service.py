@@ -182,6 +182,7 @@ def add_games_to_backlog(session: Session, games: list[GameSearchResult]) -> lis
             else backlog_by_title.get(title_key)
         )
         if existing_entry:
+            _apply_external_ratings(existing_entry.game, game_input)
             operations.append(
                 BacklogBatchOperation(
                     entry=existing_entry,
@@ -210,6 +211,8 @@ def add_games_to_backlog(session: Session, games: list[GameSearchResult]) -> lis
                 external_id=game_input.external_id,
                 external_source=game_input.external_source,
                 external_url=game_input.external_url,
+                external_ratings=_external_rating_payload(game_input),
+                external_ratings_updated_at=game_input.external_ratings_updated_at,
             )
             session.add(game)
             if external_key:
@@ -218,6 +221,8 @@ def add_games_to_backlog(session: Session, games: list[GameSearchResult]) -> lis
                 games_by_title[title_key] = game
                 games_without_external_by_title[title_key] = game
             games_by_title.setdefault(title_key, game)
+        else:
+            _apply_external_ratings(game, game_input)
 
         entry = BacklogEntry(
             game=game,
@@ -261,6 +266,17 @@ def add_games_to_backlog(session: Session, games: list[GameSearchResult]) -> lis
     for operation in operations:
         operation.entry = entries_by_id[operation.entry.id]
     return operations
+
+
+def _external_rating_payload(game_input: GameSearchResult) -> list[dict]:
+    return [rating.model_dump(mode="json") for rating in game_input.external_ratings]
+
+
+def _apply_external_ratings(game: Game, game_input: GameSearchResult) -> None:
+    if not game_input.external_ratings:
+        return
+    game.external_ratings = _external_rating_payload(game_input)
+    game.external_ratings_updated_at = game_input.external_ratings_updated_at
 
 
 def _find_candidate_games(session: Session, game_inputs: list[GameSearchResult]) -> list[Game]:

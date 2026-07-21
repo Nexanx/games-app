@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 import pytest
 from sqlalchemy import func, select
 
 from app.api import games as games_api
 from app.models import BacklogEntry, Game
-from app.schemas.games import GameSearchPage, GameSearchResult
+from app.schemas.games import ExternalRating, GameSearchPage, GameSearchResult
 from app.services.backlog_service import add_games_to_backlog
 
 
@@ -18,6 +20,11 @@ def rawg_game(title: str, external_id: str | None, *, source: str = "RAWG") -> G
         external_id=external_id,
         external_source=source,
         external_url="https://rawg.io/games/example",
+        external_ratings=[
+            ExternalRating(source="RAWG", value=4.4, scale=5, count=123),
+            ExternalRating(source="Metacritic", value=83, scale=100),
+        ],
+        external_ratings_updated_at=datetime(2026, 7, 21, tzinfo=timezone.utc),
         source="RAWG",
     )
 
@@ -145,6 +152,9 @@ def test_batch_add_creates_multiple_backlog_entries_atomically(client, db_sessio
     entries = db_session.scalars(select(BacklogEntry).order_by(BacklogEntry.position)).all()
     assert [entry.position for entry in entries] == [0, 1]
     assert db_session.scalar(select(func.count(Game.id))) == 2
+    stored_game = db_session.scalar(select(Game).where(Game.title == "Hades"))
+    assert stored_game.external_ratings[0] == {"source": "RAWG", "value": 4.4, "scale": 5.0, "count": 123}
+    assert stored_game.external_ratings_updated_at is not None
 
 
 def test_batch_add_reuses_existing_external_game_and_reports_duplicate(client, db_session):
@@ -242,4 +252,6 @@ def test_create_game_reuses_an_existing_rawg_identity(client, db_session):
 
     assert response.status_code == 200
     assert response.json()["id"] == existing.id
+    assert response.json()["external_ratings"][0]["source"] == "RAWG"
+    assert db_session.get(Game, existing.id).external_ratings[1]["source"] == "Metacritic"
     assert db_session.scalar(select(func.count(Game.id))) == 1

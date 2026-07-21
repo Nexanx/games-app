@@ -55,6 +55,7 @@ async def create_game(
     data = payload.model_dump()
     existing = _find_existing_game(db, data)
     if existing:
+        _update_external_ratings(existing, data, db)
         response.status_code = 200
         return existing
     if not data.get("cover_url"):
@@ -63,6 +64,7 @@ async def create_game(
 
     existing = _find_existing_game(db, data)
     if existing:
+        _update_external_ratings(existing, data, db)
         response.status_code = 200
         return existing
 
@@ -161,7 +163,20 @@ def _merge_provider_data(data: dict, result: GameSearchResult) -> dict:
         merged["external_source"] = result.external_source
     if not merged.get("external_url") and result.external_url:
         merged["external_url"] = result.external_url
+    if not merged.get("external_ratings") and result.external_ratings:
+        merged["external_ratings"] = [rating.model_dump(mode="json") for rating in result.external_ratings]
+        merged["external_ratings_updated_at"] = result.external_ratings_updated_at
     return merged
+
+
+def _update_external_ratings(existing: Game, data: dict, db: Session) -> None:
+    ratings = data.get("external_ratings")
+    if not ratings:
+        return
+    existing.external_ratings = ratings
+    existing.external_ratings_updated_at = data.get("external_ratings_updated_at")
+    db.commit()
+    db.refresh(existing)
 
 
 async def _search_available_games(

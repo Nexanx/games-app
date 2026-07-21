@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, ListPlus, Loader2, Search } from "lucide-react";
 
 import { GameCover } from "@/components/games/GameCover";
+import { ExternalRatings } from "@/components/games/ExternalRatings";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -94,8 +95,10 @@ export function GameSearch({
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<{ message: string; warning: boolean } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [activeRequestKey, setActiveRequestKey] = useState<string | null>(null);
   const requestId = useRef(0);
   const activeSearch = useRef<AbortController | null>(null);
+  const activeSearchKey = useRef<string | null>(null);
 
   useEffect(() => () => activeSearch.current?.abort(), []);
 
@@ -104,10 +107,14 @@ export function GameSearch({
   }, [existingEntries]);
 
   async function loadPage(queryValue: string, requestedPage: number) {
+    const requestKey = getSearchRequestKey(queryValue, requestedPage);
+    if (activeSearchKey.current === requestKey) return;
     const currentRequestId = ++requestId.current;
     activeSearch.current?.abort();
     const controller = new AbortController();
     activeSearch.current = controller;
+    activeSearchKey.current = requestKey;
+    setActiveRequestKey(requestKey);
     setLoading(true);
     setError(null);
 
@@ -130,13 +137,18 @@ export function GameSearch({
       if (currentRequestId === requestId.current) {
         setLoading(false);
       }
-      if (activeSearch.current === controller) activeSearch.current = null;
+      if (activeSearch.current === controller) {
+        activeSearch.current = null;
+        activeSearchKey.current = null;
+        setActiveRequestKey(null);
+      }
     }
   }
 
   function startSearch() {
     const nextQuery = query.trim();
     if (!nextQuery) return;
+    if (activeSearchKey.current === getSearchRequestKey(nextQuery, 1)) return;
 
     setSubmittedQuery(nextQuery);
     setSelected({});
@@ -195,19 +207,27 @@ export function GameSearch({
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="flex flex-col gap-2 sm:flex-row">
+        <form
+          className="flex flex-col gap-2 sm:flex-row"
+          onSubmit={(event) => {
+            event.preventDefault();
+            startSearch();
+          }}
+        >
           <Input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Wpisz tytuł gry"
             aria-label="Tytuł wyszukiwanej gry"
-            onKeyDown={(event) => event.key === "Enter" && startSearch()}
           />
-          <Button type="button" onClick={startSearch} disabled={loading || !query.trim()}>
+          <Button
+            type="submit"
+            disabled={!query.trim() || (loading && activeRequestKey === getSearchRequestKey(query, 1))}
+          >
             {loading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Search className="h-4 w-4" aria-hidden="true" />}
             Szukaj
           </Button>
-        </div>
+        </form>
 
         <div className="flex flex-col gap-2 rounded-md border border-border bg-background/45 p-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-muted-foreground" aria-live="polite">
@@ -266,6 +286,7 @@ export function GameSearch({
                     <span className="min-w-0">
                       <span className="block truncate font-semibold">{result.title}</span>
                       <span className="block truncate text-xs text-muted-foreground">{result.genres.join(", ") || result.source}</span>
+                      <ExternalRatings ratings={result.external_ratings} updatedAt={result.external_ratings_updated_at} compact />
                     </span>
                   </label>
                 </div>
@@ -290,4 +311,8 @@ export function GameSearch({
       </CardContent>
     </Card>
   );
+}
+
+function getSearchRequestKey(query: string, page: number) {
+  return `${query.trim().toLocaleLowerCase("pl-PL")}:${page}`;
 }

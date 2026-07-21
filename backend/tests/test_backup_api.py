@@ -23,6 +23,8 @@ def seed_backup_data(db_session):
         platforms=["PC"],
         external_id="123",
         external_source="RAWG",
+        external_ratings=[{"source": "RAWG", "value": 4.4, "scale": 5, "count": 123}],
+        external_ratings_updated_at=datetime(2026, 7, 21, tzinfo=timezone.utc),
     )
     db_session.add(game)
     db_session.flush()
@@ -85,8 +87,10 @@ def test_export_and_replace_import_restore_relations_without_secrets(client, db_
     assert db_session.scalar(select(func.count(PoeEquipmentItem.id))) == 1
     assert db_session.scalar(select(func.count(ChatMessage.id))) == 1
     restored_completed = db_session.scalar(select(CompletedGameEntry))
+    restored_game = db_session.scalar(select(Game))
     restored_statistic = db_session.scalar(select(CustomStatistic))
     assert restored_completed.playtime_hours == 25.5
+    assert restored_game.external_ratings == [{"source": "RAWG", "value": 4.4, "scale": 5.0, "count": 123}]
     assert restored_statistic.completed_game_entry_id == restored_completed.id
 
 

@@ -12,12 +12,14 @@ def add_game(
     *,
     platforms: list[str] | None = None,
     genres: list[str] | None = None,
+    external_ratings: list[dict] | None = None,
 ) -> Game:
     game = Game(
         title=title,
         genres=genres or ["RPG"],
         platforms=platforms or ["PC"],
         external_source="manual",
+        external_ratings=external_ratings or [],
     )
     db_session.add(game)
     db_session.commit()
@@ -155,7 +157,12 @@ def test_year_and_month_validation_and_empty_year(client):
 
 
 def test_year_dashboard_returns_aggregates_months_and_filter_options(client, db_session):
-    rpg = add_game(db_session, "RPG Game", platforms=["PC"])
+    rpg = add_game(
+        db_session,
+        "RPG Game",
+        platforms=["PC"],
+        external_ratings=[{"source": "Metacritic", "value": 91, "scale": 100, "count": None}],
+    )
     action = add_game(db_session, "Action Game", platforms=["PlayStation 5"])
     db_session.add_all(
         [
@@ -186,6 +193,7 @@ def test_year_dashboard_returns_aggregates_months_and_filter_options(client, db_
     assert payload["average_playtime_hours"] == 30
     assert payload["average_rating"] == 8
     assert payload["best_rated_game"]["title"] == "RPG Game"
+    assert payload["best_rated_game"]["external_ratings"][0]["value"] == 91
     assert payload["longest_game"]["title"] == "Action Game"
     assert payload["active_months_count"] == 2
     assert [item["month"] for item in payload["monthly"]] == list(range(1, 13))

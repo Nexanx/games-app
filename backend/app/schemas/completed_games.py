@@ -1,5 +1,7 @@
 from pydantic import BaseModel, Field
 
+from app.schemas.games import ExternalRating
+
 
 class CompletedGameHighlightRead(BaseModel):
     id: int
@@ -10,6 +12,7 @@ class CompletedGameHighlightRead(BaseModel):
     cover_url: str | None = None
     platform: str | None = None
     genres: list[str] = Field(default_factory=list)
+    external_ratings: list[ExternalRating] = Field(default_factory=list)
 
 
 class CompletedGamesMonthSummaryRead(BaseModel):

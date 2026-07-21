@@ -1,5 +1,7 @@
 from pydantic import BaseModel, Field
 
+from app.schemas.games import ExternalRating
+
 
 class DashboardBacklogEntry(BaseModel):
     id: int
@@ -8,6 +10,7 @@ class DashboardBacklogEntry(BaseModel):
     cover_url: str | None = None
     preferred_platform: str | None = None
     note: str | None = None
+    external_ratings: list[ExternalRating] = Field(default_factory=list)
 
 
 class DashboardCompletedGame(BaseModel):
@@ -17,6 +20,7 @@ class DashboardCompletedGame(BaseModel):
     completion_date: str
     playtime_hours: float
     rating: float | None = None
+    external_ratings: list[ExternalRating] = Field(default_factory=list)
 
 
 class DashboardMonthSummary(BaseModel):

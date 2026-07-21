@@ -2,9 +2,10 @@
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Search, Save } from "lucide-react";
+import { Loader2, Search, Save } from "lucide-react";
 
 import { CustomStatisticsFields } from "@/components/games/CustomStatisticsFields";
+import { ExternalRatings } from "@/components/games/ExternalRatings";
 import { GameCover } from "@/components/games/GameCover";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,7 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ratingAfterWheel, todayAsInputValue } from "@/lib/completed-games";
 import { splitList } from "@/lib/utils";
 import { api } from "@/services/api";
-import type { BacklogEntry, CompletedGameEntry, CustomStatistic, GameSearchResult } from "@/types";
+import type { BacklogEntry, CompletedGameEntry, CustomStatistic, ExternalRating, GameSearchResult } from "@/types";
 
 type GameDraft = {
   title: string;
@@ -27,6 +28,8 @@ type GameDraft = {
   external_id?: string | null;
   external_source: string;
   external_url?: string | null;
+  external_ratings: ExternalRating[];
+  external_ratings_updated_at?: string | null;
 };
 
 const emptyGameDraft: GameDraft = {
@@ -36,7 +39,8 @@ const emptyGameDraft: GameDraft = {
   release_date: "",
   genres: "",
   platforms: "",
-  external_source: "manual"
+  external_source: "manual",
+  external_ratings: []
 };
 
 export function CompletedGameForm({ entry }: { entry?: CompletedGameEntry }) {
@@ -50,6 +54,7 @@ export function CompletedGameForm({ entry }: { entry?: CompletedGameEntry }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<GameSearchResult[]>([]);
   const [searching, setSearching] = useState(false);
+  const [searchingQuery, setSearchingQuery] = useState<string | null>(null);
   const [completionDate, setCompletionDate] = useState(entry?.completion_date || todayAsInputValue());
   const [playtimeHours, setPlaytimeHours] = useState(entry?.playtime_hours ? String(entry.playtime_hours) : "");
   const [rating, setRating] = useState(entry?.rating == null ? "" : String(entry.rating));
@@ -62,6 +67,9 @@ export function CompletedGameForm({ entry }: { entry?: CompletedGameEntry }) {
   const [error, setError] = useState<string | null>(null);
   const playtimeInputRef = useRef<HTMLInputElement>(null);
   const ratingInputRef = useRef<HTMLInputElement>(null);
+  const searchRequestId = useRef(0);
+  const activeSearch = useRef<AbortController | null>(null);
+  const activeSearchQuery = useRef<string | null>(null);
 
   const missingPlaytime = playtimeHours.trim() === "" || Number(playtimeHours.replace(",", ".")) === 0;
   const missingRating = rating.trim() === "";
@@ -100,16 +108,34 @@ export function CompletedGameForm({ entry }: { entry?: CompletedGameEntry }) {
     return () => input.removeEventListener("wheel", handleWheel);
   }, []);
 
+  useEffect(() => () => activeSearch.current?.abort(), []);
+
   async function searchGames() {
-    if (!query.trim()) return;
+    const normalizedQuery = query.trim();
+    if (!normalizedQuery || activeSearchQuery.current === normalizedQuery) return;
+    const currentRequestId = ++searchRequestId.current;
+    activeSearch.current?.abort();
+    const controller = new AbortController();
+    activeSearch.current = controller;
+    activeSearchQuery.current = normalizedQuery;
+    setSearchingQuery(normalizedQuery);
     setSearching(true);
     setError(null);
     try {
-      setResults((await api.searchGames(query)).results);
+      const response = await api.searchGames(normalizedQuery, 1, 10, controller.signal);
+      if (currentRequestId === searchRequestId.current) setResults(response.results);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Nie udało się wyszukać gry");
+      if (err instanceof DOMException && err.name === "AbortError") return;
+      if (currentRequestId === searchRequestId.current) {
+        setError(err instanceof Error ? err.message : "Nie udało się wyszukać gry");
+      }
     } finally {
-      setSearching(false);
+      if (currentRequestId === searchRequestId.current) setSearching(false);
+      if (activeSearch.current === controller) {
+        activeSearch.current = null;
+        activeSearchQuery.current = null;
+        setSearchingQuery(null);
+      }
     }
   }
 
@@ -123,7 +149,9 @@ export function CompletedGameForm({ entry }: { entry?: CompletedGameEntry }) {
       platforms: result.platforms.join(", "),
       external_id: result.external_id,
       external_source: result.external_source || result.source,
-      external_url: result.external_url
+      external_url: result.external_url,
+      external_ratings: result.external_ratings ?? [],
+      external_ratings_updated_at: result.external_ratings_updated_at
     });
     setPlatform(result.platforms[0] || "");
     setResults([]);
@@ -185,7 +213,9 @@ export function CompletedGameForm({ entry }: { entry?: CompletedGameEntry }) {
             platforms: splitList(gameDraft.platforms),
             external_id: gameDraft.external_id || null,
             external_source: gameDraft.external_source,
-            external_url: gameDraft.external_url || null
+            external_url: gameDraft.external_url || null,
+            external_ratings: gameDraft.external_ratings,
+            external_ratings_updated_at: gameDraft.external_ratings_updated_at || null
           });
           gameId = game.id;
         }
@@ -235,8 +265,20 @@ export function CompletedGameForm({ entry }: { entry?: CompletedGameEntry }) {
             ) : (
               <div className="space-y-4">
                 <div className="flex flex-col gap-2 sm:flex-row">
-                  <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Wyszukaj grę w RAWG" />
-                  <Button type="button" onClick={searchGames} disabled={searching}><Search className="h-4 w-4" aria-hidden="true" />Szukaj</Button>
+                  <Input
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key !== "Enter") return;
+                      event.preventDefault();
+                      void searchGames();
+                    }}
+                    placeholder="Wyszukaj grę w RAWG"
+                  />
+                  <Button type="button" onClick={() => void searchGames()} disabled={!query.trim() || (searching && searchingQuery === query.trim())}>
+                    {searching ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Search className="h-4 w-4" aria-hidden="true" />}
+                    Szukaj
+                  </Button>
                 </div>
                 {results.length ? (
                   <div className="max-h-72 space-y-2 overflow-auto rounded-lg border border-border p-2">
@@ -254,7 +296,7 @@ export function CompletedGameForm({ entry }: { entry?: CompletedGameEntry }) {
                           variant="thumbnail"
                           className="h-12 w-9 shrink-0 rounded"
                         />
-                        <span className="min-w-0"><strong className="block truncate">{result.title}</strong><span className="block truncate text-xs text-muted-foreground">{result.genres.join(", ")}</span></span>
+                        <span className="min-w-0"><strong className="block truncate">{result.title}</strong><span className="block truncate text-xs text-muted-foreground">{result.genres.join(", ")}</span><ExternalRatings ratings={result.external_ratings} updatedAt={result.external_ratings_updated_at} compact /></span>
                       </button>
                     ))}
                   </div>

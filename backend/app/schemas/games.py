@@ -4,6 +4,19 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
+class ExternalRating(BaseModel):
+    source: Literal["RAWG", "Metacritic"]
+    value: float = Field(..., ge=0)
+    scale: float = Field(..., gt=0)
+    count: int | None = Field(default=None, ge=0)
+
+    @model_validator(mode="after")
+    def validate_scale(self) -> "ExternalRating":
+        if self.value > self.scale:
+            raise ValueError("External rating value cannot exceed its scale")
+        return self
+
+
 class GameBase(BaseModel):
     title: str = Field(..., min_length=1, max_length=255)
     description: str | None = None
@@ -14,6 +27,8 @@ class GameBase(BaseModel):
     external_id: str | None = None
     external_source: str = "manual"
     external_url: str | None = None
+    external_ratings: list[ExternalRating] = Field(default_factory=list)
+    external_ratings_updated_at: datetime | None = None
 
 
 class GameCreate(GameBase):
@@ -30,6 +45,8 @@ class GameUpdate(BaseModel):
     external_id: str | None = None
     external_source: str | None = None
     external_url: str | None = None
+    external_ratings: list[ExternalRating] | None = None
+    external_ratings_updated_at: datetime | None = None
 
 
 class GameRead(GameBase):

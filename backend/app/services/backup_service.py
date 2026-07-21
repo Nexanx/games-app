@@ -129,6 +129,8 @@ def _restore_records(db: Session, data: BackupData) -> dict[str, int]:
             external_id=item.external_id,
             external_source=item.external_source,
             external_url=item.external_url,
+            external_ratings=[rating.model_dump(mode="json") for rating in item.external_ratings],
+            external_ratings_updated_at=item.external_ratings_updated_at,
             created_at=item.created_at,
             updated_at=item.updated_at,
         )

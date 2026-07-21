@@ -231,7 +231,7 @@ export default function CompletedGamesYearPage() {
               />
             </div>
             <fieldset>
-              <legend className="text-sm font-semibold">Ocena</legend>
+              <legend className="text-sm font-semibold">Moja ocena</legend>
               <div className="mt-2 grid gap-3 sm:grid-cols-2">
                 <label className="space-y-1.5 text-sm text-muted-foreground">
                   <span>Od</span>

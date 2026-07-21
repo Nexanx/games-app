@@ -278,6 +278,7 @@ def _highlight(entry: CompletedGameEntry | None) -> CompletedGameHighlightRead |
         cover_url=entry.game.cover_url,
         platform=entry.platform,
         genres=entry.game.genres,
+        external_ratings=entry.game.external_ratings,
     )
 
 

@@ -3,6 +3,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
+from app.schemas.games import ExternalRating
+
 
 BACKUP_FORMAT_VERSION = 2
 
@@ -18,6 +20,8 @@ class BackupGame(BaseModel):
     external_id: str | None = None
     external_source: str = "manual"
     external_url: str | None = None
+    external_ratings: list[ExternalRating] = Field(default_factory=list)
+    external_ratings_updated_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
 

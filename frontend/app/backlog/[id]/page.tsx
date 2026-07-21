@@ -6,6 +6,7 @@ import Link from "next/link";
 import { ArrowLeft, Check, Save, Trash2 } from "lucide-react";
 
 import { GameCover } from "@/components/games/GameCover";
+import { ExternalRatings } from "@/components/games/ExternalRatings";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -13,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { Textarea } from "@/components/ui/textarea";
+import { metacriticValueLabel } from "@/lib/external-ratings";
 import { api } from "@/services/api";
 import type { BacklogEntry } from "@/types";
 
@@ -45,6 +47,12 @@ export default function BacklogDetailsPage() {
             <CardTitle>{entry.game.title}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Metric label="Metacritic" value={metacriticValueLabel(entry.game.external_ratings)} />
+              <div className="rounded-md bg-background/60 p-3">
+                <ExternalRatings ratings={entry.game.external_ratings} updatedAt={entry.game.external_ratings_updated_at} sources={["RAWG"]} />
+              </div>
+            </div>
             <div className="space-y-1.5">
               <Label htmlFor="preferred-platform">Preferowana platforma</Label>
               <Input
@@ -95,4 +103,8 @@ export default function BacklogDetailsPage() {
       </section>
     </div>
   );
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return <div className="rounded-md bg-background/60 p-3"><p className="text-xs text-muted-foreground">{label}</p><p className="mt-1 font-semibold">{value}</p></div>;
 }

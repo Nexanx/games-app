@@ -80,6 +80,7 @@ def build_dashboard_summary(session: Session, today: date | None = None) -> Dash
                 cover_url=entry.game.cover_url,
                 preferred_platform=entry.preferred_platform,
                 note=entry.note,
+                external_ratings=entry.game.external_ratings,
             )
             for entry in next_backlog
         ],
@@ -91,6 +92,7 @@ def build_dashboard_summary(session: Session, today: date | None = None) -> Dash
                 completion_date=entry.completion_date.isoformat(),
                 playtime_hours=entry.playtime_hours,
                 rating=entry.rating,
+                external_ratings=entry.game.external_ratings,
             )
             for entry in recent_completed
         ],
