@@ -20,15 +20,29 @@ Projekt nie ma własnych kont ani ról. Next.js odpowiada za interfejs, a FastAP
 - ręczne dodawanie gry, gdy RAWG nie jest potrzebny;
 - wykrywanie duplikatów oraz atomowe dodawanie grupy wyników;
 - własna kolejność drag-and-drop, preferowana platforma, notatka, filtrowanie i sortowanie;
-- rekomendacje RAWG dopasowywane do ocen, gatunków, platform oraz trwałych reakcji „Pasuje do mnie” / „Nie dla mnie”;
-- osobny widok premier RAWG z filtrowaniem po dacie, platformie, gatunku i tytule;
+- rekomendacje RAWG dopasowywane do ocen, gatunków, platform oraz trwałych reakcji „Pasuje do mnie” / „Nie dla mnie”; opinię można od razu cofnąć, a „Ukryj” działa neutralnie tylko w bieżącej przeglądarce;
+- osobny widok premier RAWG z filtrowaniem po dacie, platformie, gatunku i tytule; terminy premier, zwłaszcza przyszłe i zależne od platformy, mogą się zmienić;
 - lista pozostaje niezależna od historii ukończeń.
+
+### Oceny zewnętrzne
+
+- wyniki wyszukiwania, karty gier i szczegóły mogą pokazywać osobno `Moja ocena`, ocenę RAWG oraz wynik Metacritic, wyłącznie gdy RAWG zwraca odpowiednie pole;
+- wartość, skala, liczba głosów i data odświeżenia są przechowywane jako migawka zewnętrzna i nie nadpisują oceny użytkownika;
+- aplikacja nie scrapuje stron ocen. Uzupełnienie istniejącej biblioteki jest ręczną operacją administracyjną i wymaga `RAWG_API_KEY`:
+
+```powershell
+cd backend
+.\.venv\Scripts\python.exe -m app.database.backfill_external_ratings
+```
+
+Dodaj `--refresh-existing`, aby odświeżyć również gry, które już mają zapisany wynik Metacritic. Polecenie raportuje gry bez wyniku i błędy, ale nie usuwa wpisów użytkownika.
 
 ### Ukończone gry
 
 - osobna historia dla każdego roku, z rokiem zachowanym w URL;
 - wielokrotne ukończenia tej samej gry jako oddzielne wpisy;
-- data ukończenia, czas, opcjonalna ocena, platforma, recenzja i własne statystyki;
+- data ukończenia, czas, opcjonalna ocena, platforma, recenzja i własne statystyki; przy braku czasu lub oceny formularz ostrzega i pozwala świadomie zapisać wpis;
+- filtry platformy, gatunku, oceny, daty ukończenia i czasu gry zapisane w URL, licznik wyników oraz niezależnie zwijane grupy miesięczne;
 - kompaktowa nawigacja między latami dostępnymi w bazie;
 - szczegóły, edycja i usuwanie pojedynczego ukończenia.
 
@@ -40,10 +54,12 @@ Analiza działa dla wybranego roku i ma sześć sekcji:
 2. **Trendy** — miesięczna liczba ukończeń, czas gry oraz średnia ocena.
 3. **Heatmapa** — aktywność w dniach roku z możliwością przejścia do źródłowych ukończeń.
 4. **Porównanie miesięcy** — proste porównanie dwóch miesięcy tego samego roku.
-5. **Prognozy** — deterministyczna prognoza liczby ukończeń albo czasu na podstawie zapisanej historii.
+5. **Prognozy** — deterministyczna prognoza miesięcznej liczby ukończeń albo czasu gry oraz, dla czasu, osobna prognoza skumulowanego wyniku rocznego.
 6. **Raport roczny** — tekstowe podsumowanie, wykresy i widok przygotowany do wydruku.
 
-Brak oceny nie jest liczony jako zero. API wypełnia miesiące bez ukończeń wartościami zerowymi tam, gdzie jest to potrzebne do pokazania pełnego trendu.
+Tryb **Cała historia** jest osobnym widokiem, a nie dodatkowym rokiem na liście. Agreguje wszystkie lata, pokazuje podsumowanie, rekordy, wykresy ukończeń, czasu i ocen według roku oraz porównanie platform i gatunków; z każdego roku można przejść do jego analizy.
+
+Brak oceny nie jest liczony jako zero. API wypełnia miesiące bez ukończeń wartościami zerowymi tam, gdzie jest to potrzebne do pokazania pełnego trendu. Prognoza jest szacunkiem: interfejs pokazuje wymagania dotyczące danych, MAE, RMSE i model bazowy.
 
 ### Chatbot
 
@@ -145,7 +161,6 @@ Minimalna konfiguracja:
 ```env
 DATABASE_URL=postgresql+psycopg://games:games@localhost:5433/games_app
 FRONTEND_URL=http://localhost:3000
-NEXT_PUBLIC_API_URL=/api
 ```
 
 Opcjonalne integracje:
@@ -159,12 +174,12 @@ OPENAI_MODEL=gemini-3.5-flash
 LLM_REQUEST_TIMEOUT_SECONDS=60
 ```
 
-- `RAWG_API_KEY` włącza wyszukiwanie i uzupełnianie okładek/metadanych.
+- `RAWG_API_KEY` włącza wyszukiwanie, uzupełnianie okładek i metadanych, premiery, rekomendacje oraz migawki ocen zewnętrznych.
 - `POE_API_TOKEN` jest potrzebny wyłącznie do synchronizacji lig.
 - `OPENAI_API_KEY`, `OPENAI_BASE_URL` i `OPENAI_MODEL` włączają chatbota.
 - `LLM_REQUEST_TIMEOUT_SECONDS` musi mieścić się w zakresie `(0, 120]`; frontend czeka 75 sekund, aby backend zdążył zwrócić kontrolowany timeout.
 
-Backend czyta kolejno rootowe `.env.production`, rootowe `.env` i `backend/.env`. Przy ręcznym uruchamianiu frontendu utwórz `frontend/.env.local`:
+Backend czyta kolejno rootowe `.env.production`, rootowe `.env` i `backend/.env`. Skrypt startowy ustawia lokalny adres API frontendu automatycznie. Przy ręcznym uruchamianiu frontendu utwórz `frontend/.env.local`:
 
 ```env
 NEXT_PUBLIC_API_URL=/api
@@ -237,7 +252,7 @@ Seed nie dodaje przykładowych gier ani danych PoE:
 
 ## Kopie danych
 
-Karta **Kopia zapasowa** na Dashboardzie eksportuje jeden plik JSON (`format_version: 2`) zawierający gry, backlog, ukończenia, własne statystyki, ligi, snapshoty postaci, wyposażenie, statystyki PoE i historię rozmów. Import pozostaje zgodny ze starszym formatem `1`; brakujące źródło snapshotu jest wtedy traktowane jako wpis ręczny. Sekrety, wartości `.env` i surowe kody PoB nie są eksportowane.
+Karta **Kopia zapasowa** na Dashboardzie eksportuje jeden plik JSON (`format_version: 3`) zawierający gry, backlog, ukończenia, własne statystyki, ligi, snapshoty postaci, wyposażenie, statystyki PoE, historię rozmów oraz zapisane opinie o rekomendacjach. Import pozostaje zgodny ze starszymi formatami `1` i `2`; brakujące w nich pola są uzupełniane bez zmiany danych użytkownika. Sekrety, wartości `.env` i surowe kody PoB nie są eksportowane.
 
 Import działa wyłącznie w trybie `replace`. Backend najpierw waliduje cały dokument i relacje, a następnie zastępuje dane w jednej transakcji. Nieprawidłowy plik lub błąd zapisu wycofuje operację. Nie ma trybu scalania.
 
@@ -271,8 +286,8 @@ Manifest, service worker i strona offline pozwalają zainstalować aplikację ja
 ### Gry i backlog
 
 - `GET /api/games/search?query=Hades&page=1&page_size=10`
-- `GET /api/games/recommendations`, `PUT /api/games/recommendations/feedback`
-- `GET /api/games/releases`, `GET /api/games/rawg/{external_id}`
+- `GET /api/games/recommendations`, `PUT/DELETE /api/games/recommendations/feedback`
+- `GET /api/games/releases?date_from=2026-08-01&date_to=2026-08-31`, `GET /api/games/rawg/{external_id}`
 - `GET/POST /api/games`, `GET/PATCH/DELETE /api/games/{id}`
 - `GET/POST /api/backlog`, `GET/PATCH/DELETE /api/backlog/{id}`
 - `POST /api/backlog/batch`, `POST /api/backlog/reorder`
@@ -280,6 +295,7 @@ Manifest, service worker i strona offline pozwalają zainstalować aplikację ja
 ### Ukończenia i Analiza
 
 - `GET /api/completed-games/years`
+- `GET /api/completed-games/history`
 - `GET/POST /api/completed-games`, `GET/PATCH/DELETE /api/completed-games/{id}`
 - `GET /api/completed-games/year/{year}/dashboard`
 - `GET /api/completed-games/year/{year}/activity`
