@@ -9,6 +9,7 @@ from app.models import (
     CompletedGameEntry,
     CustomStatistic,
     Game,
+    GameRecommendationFeedback,
     PoeCharacter,
     PoeCurrencyStat,
     PoeEquipmentItem,
@@ -61,6 +62,17 @@ def seed_backup_data(db_session):
     db_session.add(session)
     db_session.flush()
     db_session.add(ChatMessage(session_id=session.id, role="user", content="Podsumuj grę"))
+    db_session.add(
+        GameRecommendationFeedback(
+            external_source="rawg",
+            external_id="999",
+            title="Suggested Game",
+            verdict="negative",
+            genres=["RPG"],
+            platforms=["PC"],
+            tags=["Space"],
+        )
+    )
     db_session.commit()
 
 
@@ -75,7 +87,7 @@ def test_export_and_replace_import_restore_relations_without_secrets(client, db_
     imported = client.post("/api/backup/import", json={"mode": "replace", "backup": payload})
 
     assert exported.status_code == 200
-    assert payload["format_version"] == 2
+    assert payload["format_version"] == 3
     assert "OPENAI_API_KEY" not in exported.text
     assert imported.status_code == 200
     assert imported.json()["restored"]["games"] == 1
@@ -86,12 +98,14 @@ def test_export_and_replace_import_restore_relations_without_secrets(client, db_
     assert db_session.scalar(select(func.count(PoeCharacter.id))) == 1
     assert db_session.scalar(select(func.count(PoeEquipmentItem.id))) == 1
     assert db_session.scalar(select(func.count(ChatMessage.id))) == 1
+    assert db_session.scalar(select(func.count(GameRecommendationFeedback.id))) == 1
     restored_completed = db_session.scalar(select(CompletedGameEntry))
     restored_game = db_session.scalar(select(Game))
     restored_statistic = db_session.scalar(select(CustomStatistic))
     assert restored_completed.playtime_hours == 25.5
     assert restored_game.external_ratings == [{"source": "RAWG", "value": 4.4, "scale": 5.0, "count": 123}]
     assert restored_statistic.completed_game_entry_id == restored_completed.id
+    assert db_session.scalar(select(GameRecommendationFeedback)).tags == ["Space"]
 
 
 def test_invalid_import_never_replaces_existing_data(client, db_session):
@@ -135,3 +149,16 @@ def test_version_one_backup_remains_importable_without_snapshot_fields(client, d
     restored_character = db_session.scalar(select(PoeCharacter))
     assert restored_character.snapshot_source == "manual"
     assert db_session.scalar(select(func.count(PoeEquipmentItem.id))) == 0
+
+
+def test_version_two_backup_remains_importable_without_recommendation_feedback(client, db_session):
+    seed_backup_data(db_session)
+    payload = client.get("/api/backup/export").json()
+    payload["format_version"] = 2
+    payload["data"].pop("recommendation_feedback")
+
+    response = client.post("/api/backup/import", json={"mode": "replace", "backup": payload})
+
+    assert response.status_code == 200
+    assert response.json()["restored"]["recommendation_feedback"] == 0
+    assert db_session.scalar(select(func.count(GameRecommendationFeedback.id))) == 0

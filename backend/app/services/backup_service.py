@@ -12,6 +12,7 @@ from app.models import (
     CompletedGameEntry,
     CustomStatistic,
     Game,
+    GameRecommendationFeedback,
     PoeCharacter,
     PoeCurrencyStat,
     PoeEquipmentItem,
@@ -31,6 +32,7 @@ from app.schemas.backup import (
     BackupPoeCurrencyStatistic,
     BackupPoeEquipmentItem,
     BackupPoeLeague,
+    BackupRecommendationFeedback,
 )
 
 
@@ -75,6 +77,10 @@ def export_backup(db: Session) -> BackupDocument:
                 BackupChatMessage.model_validate(item, from_attributes=True)
                 for item in db.scalars(select(ChatMessage).order_by(ChatMessage.id))
             ],
+            recommendation_feedback=[
+                BackupRecommendationFeedback.model_validate(item, from_attributes=True)
+                for item in db.scalars(select(GameRecommendationFeedback).order_by(GameRecommendationFeedback.id))
+            ],
             # Settings are intentionally empty: the active application has no settings model and backups never contain secrets.
             settings={},
         ),
@@ -96,6 +102,7 @@ def replace_with_backup(db: Session, data: BackupData) -> BackupImportResult:
 def _delete_existing_records(db: Session) -> None:
     # Explicit child-first deletes also work with SQLite test databases that do not enable FK cascades.
     for model in (
+        GameRecommendationFeedback,
         ChatMessage,
         ChatSession,
         PoeCurrencyStat,
@@ -262,6 +269,21 @@ def _restore_records(db: Session, data: BackupData) -> dict[str, int]:
                 created_at=item.created_at,
             )
         )
+
+    for item in data.recommendation_feedback:
+        db.add(
+            GameRecommendationFeedback(
+                external_source=item.external_source.strip().casefold(),
+                external_id=item.external_id.strip().casefold(),
+                title=item.title,
+                verdict=item.verdict,
+                genres=item.genres,
+                platforms=item.platforms,
+                tags=item.tags,
+                created_at=item.created_at,
+                updated_at=item.updated_at,
+            )
+        )
     db.flush()
     return {
         "games": len(data.games),
@@ -274,4 +296,5 @@ def _restore_records(db: Session, data: BackupData) -> dict[str, int]:
         "poe_equipment_items": len(data.poe_equipment_items),
         "chat_sessions": len(data.chat_sessions),
         "chat_messages": len(data.chat_messages),
+        "recommendation_feedback": len(data.recommendation_feedback),
     }

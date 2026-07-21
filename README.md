@@ -20,6 +20,8 @@ Projekt nie ma własnych kont ani ról. Next.js odpowiada za interfejs, a FastAP
 - ręczne dodawanie gry, gdy RAWG nie jest potrzebny;
 - wykrywanie duplikatów oraz atomowe dodawanie grupy wyników;
 - własna kolejność drag-and-drop, preferowana platforma, notatka, filtrowanie i sortowanie;
+- rekomendacje RAWG dopasowywane do ocen, gatunków, platform oraz trwałych reakcji „Pasuje do mnie” / „Nie dla mnie”;
+- osobny widok premier RAWG z filtrowaniem po dacie, platformie, gatunku i tytule;
 - lista pozostaje niezależna od historii ukończeń.
 
 ### Ukończone gry
@@ -143,7 +145,7 @@ Minimalna konfiguracja:
 ```env
 DATABASE_URL=postgresql+psycopg://games:games@localhost:5433/games_app
 FRONTEND_URL=http://localhost:3000
-NEXT_PUBLIC_API_URL=http://localhost:8000/api
+NEXT_PUBLIC_API_URL=/api
 ```
 
 Opcjonalne integracje:
@@ -165,7 +167,7 @@ LLM_REQUEST_TIMEOUT_SECONDS=60
 Backend czyta kolejno rootowe `.env.production`, rootowe `.env` i `backend/.env`. Przy ręcznym uruchamianiu frontendu utwórz `frontend/.env.local`:
 
 ```env
-NEXT_PUBLIC_API_URL=http://localhost:8000/api
+NEXT_PUBLIC_API_URL=/api
 ```
 
 Po zmianie zmiennych zrestartuj odpowiedni proces lub kontener. Pliki z rzeczywistymi sekretami nie powinny trafiać do repozytorium.
@@ -225,7 +227,7 @@ Migracje uruchamiaj z katalogu `backend`:
 .\.venv\Scripts\python.exe -m alembic upgrade head
 ```
 
-Rewizje tworzą pierwotny model, bezpiecznie rozdzielają backlog od powtarzalnych ukończeń i dodają indeksy używane przez deduplikację RAWG, kolejność backlogu, historię chatbota oraz listy lig/postaci/statystyk PoE. Migracje PoE dodają niedestrukcyjnie źródło snapshotu i tabelę `poe_equipment_items`. Unikalność nazwy ligi obowiązuje w obrębie wersji gry; migracja zatrzyma się bez zmiany danych, jeśli wcześniej zapisano duplikaty wymagające ręcznego rozstrzygnięcia.
+Rewizje tworzą pierwotny model, bezpiecznie rozdzielają backlog od powtarzalnych ukończeń i dodają indeksy używane przez deduplikację RAWG, kolejność backlogu, historię chatbota oraz listy lig/postaci/statystyk PoE. Kolejne migracje dodają bez zmiany istniejących wpisów zewnętrzne oceny gier i osobną tabelę opinii o rekomendacjach. Migracje PoE dodają niedestrukcyjnie źródło snapshotu i tabelę `poe_equipment_items`. Unikalność nazwy ligi obowiązuje w obrębie wersji gry; migracja zatrzyma się bez zmiany danych, jeśli wcześniej zapisano duplikaty wymagające ręcznego rozstrzygnięcia.
 
 Seed nie dodaje przykładowych gier ani danych PoE:
 
@@ -269,6 +271,8 @@ Manifest, service worker i strona offline pozwalają zainstalować aplikację ja
 ### Gry i backlog
 
 - `GET /api/games/search?query=Hades&page=1&page_size=10`
+- `GET /api/games/recommendations`, `PUT /api/games/recommendations/feedback`
+- `GET /api/games/releases`, `GET /api/games/rawg/{external_id}`
 - `GET/POST /api/games`, `GET/PATCH/DELETE /api/games/{id}`
 - `GET/POST /api/backlog`, `GET/PATCH/DELETE /api/backlog/{id}`
 - `POST /api/backlog/batch`, `POST /api/backlog/reorder`
@@ -367,7 +371,7 @@ Sprawdź `GET /api/chat/status`, klucz, base URL i nazwę modelu. Backend rozró
 
 ### Frontend nie łączy się z API
 
-Sprawdź `NEXT_PUBLIC_API_URL` oraz `FRONTEND_URL`. Dla lokalnych procesów typowa wartość to `http://localhost:8000/api`; w produkcyjnym Compose frontend używa `/api` przez Caddy.
+Sprawdź `NEXT_PUBLIC_API_URL` oraz `FRONTEND_URL`. Lokalnie frontend używa `/api` przez proxy developerskie Next.js, a w produkcyjnym Compose ten sam adres obsługuje Caddy.
 
 ## Bezpieczeństwo i prywatność
 

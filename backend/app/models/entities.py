@@ -88,6 +88,27 @@ class CompletedGameEntry(Base, TimestampMixin):
     )
 
 
+class GameRecommendationFeedback(Base, TimestampMixin):
+    __tablename__ = "game_recommendation_feedback"
+    __table_args__ = (
+        CheckConstraint("verdict IN ('positive', 'negative')", name="ck_game_recommendation_feedback_verdict"),
+        UniqueConstraint(
+            "external_source",
+            "external_id",
+            name="uq_game_recommendation_feedback_external_identity",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    external_source: Mapped[str] = mapped_column(String(50), nullable=False)
+    external_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    verdict: Mapped[str] = mapped_column(String(20), nullable=False)
+    genres: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    platforms: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    tags: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+
+
 class CustomStatistic(Base, TimestampMixin):
     __tablename__ = "custom_statistics"
     __table_args__ = (

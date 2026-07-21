@@ -27,6 +27,12 @@ export interface Game {
 
 export interface GameSearchResult extends Omit<Game, "id" | "created_at" | "updated_at"> {
   source: string;
+  tags?: string[];
+  release_date_tba?: boolean;
+  platform_release_dates?: Array<{
+    platform: string;
+    release_date?: string | null;
+  }>;
 }
 
 export interface GameSearchPage {
@@ -86,6 +92,36 @@ export interface CompletedGamesFilters {
   date_to?: string;
   playtime_min?: number;
   playtime_max?: number;
+}
+
+export interface GameRecommendation {
+  game: GameSearchResult;
+  reason: string;
+  kind: "personalized" | "popular";
+  score: number;
+}
+
+export interface GameRecommendations {
+  results: GameRecommendation[];
+  personalized: boolean;
+  notice?: string | null;
+  source: "RAWG";
+}
+
+export type GameRecommendationVerdict = "positive" | "negative";
+
+export interface GameReleasesPage extends GameSearchPage {
+  source: "RAWG";
+}
+
+export interface GameReleaseFilters {
+  date_from: string;
+  date_to: string;
+  platform?: string;
+  genre?: string;
+  search?: string;
+  page?: number;
+  page_size?: number;
 }
 
 export interface CompletedGameHighlight {

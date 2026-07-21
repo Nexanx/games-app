@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Filter, Plus, Search } from "lucide-react";
+import Link from "next/link";
+import { CalendarDays, Filter, Plus, Search } from "lucide-react";
 
 import { BacklogList } from "@/components/games/BacklogList";
 import { GameForm } from "@/components/games/GameForm";
+import { GameRecommendations } from "@/components/games/GameRecommendations";
 import { GameSearch } from "@/components/games/GameSearch";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -81,12 +83,19 @@ export default function BacklogPage() {
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-col gap-2">
-        <p className="text-sm font-semibold text-primary">Plan na przyszłość</p>
-        <h1 className="text-2xl font-bold leading-tight sm:text-3xl">Do ogrania</h1>
-        <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
-          Wyszukuj gry, zapisuj krótkie notatki i ustawiaj kolejność. Ta lista jest niezależna od historii ukończeń.
-        </p>
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex flex-col gap-2">
+          <p className="text-sm font-semibold text-primary">Plan na przyszłość</p>
+          <h1 className="text-2xl font-bold leading-tight sm:text-3xl">Do ogrania</h1>
+          <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
+            Wyszukuj gry, zapisuj krótkie notatki i ustawiaj kolejność. Ta lista jest niezależna od historii ukończeń.
+          </p>
+        </div>
+        <Link href="/releases" className="shrink-0">
+          <Button variant="secondary" className="w-full sm:w-auto">
+            <CalendarDays className="h-4 w-4" aria-hidden="true" /> Premiery gier
+          </Button>
+        </Link>
       </header>
 
       <section className="space-y-3">
@@ -148,6 +157,8 @@ export default function BacklogPage() {
           }}
         />
       ) : null}
+
+      <GameRecommendations onBacklogChanged={afterSearchGamesAdded} />
     </div>
   );
 }

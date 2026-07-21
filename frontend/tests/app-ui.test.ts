@@ -58,4 +58,36 @@ describe("application UI configuration", () => {
     expect(historyAnalytics).toContain("Analizy — Cała historia");
     expect(historyAnalytics).toContain("<AnalyticsHistory />");
   });
+
+  it("keeps discovery outside analytics and does not overload primary navigation", () => {
+    const backlog = readProjectFile("app/backlog/page.tsx");
+    const releases = readProjectFile("app/releases/page.tsx");
+    const recommendations = readProjectFile("components/games/GameRecommendations.tsx");
+
+    expect(navItems.map((item) => item.href)).not.toContain("/releases");
+    expect(backlog).toContain('href="/releases"');
+    expect(backlog).toContain("<GameRecommendations");
+    expect(backlog.indexOf("<GameRecommendations")).toBeGreaterThan(backlog.indexOf("<BacklogList"));
+    expect(releases).toContain("Premiery");
+    expect(releases).toContain("Daty, szczególnie przyszłe i zależne od platformy, mogą ulec zmianie.");
+    expect(recommendations).toContain("Polecane dla Ciebie");
+    expect(recommendations).toContain("Dodaj do ogrania");
+    expect(recommendations).toContain("Pasuje do mnie");
+    expect(recommendations).toContain("Nie dla mnie");
+    expect(recommendations).toContain("Cofnij opinię");
+    expect(recommendations).toContain("saveGameRecommendationFeedback");
+  });
+
+  it("uses a same-origin API path with a development-only backend proxy", () => {
+    const apiService = readProjectFile("services/api.ts");
+    const nextConfig = readProjectFile("next.config.mjs");
+    const startScript = readFileSync(join(process.cwd(), "..", "scripts", "start_app.ps1"), "utf8");
+
+    expect(apiService).toContain('process.env.NEXT_PUBLIC_API_URL ?? "/api"');
+    expect(nextConfig).toContain('process.env.NODE_ENV !== "development"');
+    expect(nextConfig).toContain('source: "/api/:path*"');
+    expect(nextConfig).toContain('destination: "http://127.0.0.1:8000/api/:path*"');
+    expect(startScript).toContain('$LocalApiSetting = "NEXT_PUBLIC_API_URL=/api"');
+    expect(startScript).toContain("Zmieniono lokalny adres API na /api");
+  });
 });

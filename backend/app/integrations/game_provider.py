@@ -38,6 +38,47 @@ class GameProvider:
         )
         return self._map_result(payload, datetime.now(timezone.utc))
 
+    async def discover(
+        self,
+        *,
+        page: int = 1,
+        page_size: int = 20,
+        date_from: date | None = None,
+        date_to: date | None = None,
+        genres: list[str] | None = None,
+        parent_platforms: list[int] | None = None,
+        query: str | None = None,
+        ordering: str = "-rating",
+    ) -> GameSearchPage:
+        """Fetch one filtered RAWG list page without issuing per-game requests."""
+
+        if not self.settings.rawg_api_key:
+            raise GameProviderConfigurationError("RAWG_API_KEY is not configured.")
+        params: dict[str, object] = {
+            "key": self.settings.rawg_api_key,
+            "page": page,
+            "page_size": page_size,
+            "ordering": ordering,
+        }
+        if date_from is not None and date_to is not None:
+            params["dates"] = f"{date_from.isoformat()},{date_to.isoformat()}"
+        if genres:
+            params["genres"] = ",".join(dict.fromkeys(genres))
+        if parent_platforms:
+            params["parent_platforms"] = ",".join(str(value) for value in dict.fromkeys(parent_platforms))
+        if query and query.strip():
+            params["search"] = query.strip()
+            params["search_precise"] = True
+
+        fetched_at = datetime.now(timezone.utc)
+        payload = await self._request_rawg("https://api.rawg.io/api/games", params=params)
+        return GameSearchPage(
+            results=[self._map_result(item, fetched_at) for item in payload.get("results", [])],
+            page=page,
+            page_size=page_size,
+            has_next=bool(payload.get("next")),
+        )
+
     async def _search_rawg(self, query: str, *, page: int, page_size: int) -> GameSearchPage:
         params = {
             "key": self.settings.rawg_api_key,
@@ -71,28 +112,49 @@ class GameProvider:
 
     def _map_result(self, item: dict, fetched_at: datetime) -> GameSearchResult:
         external_ratings = self._external_ratings(item)
+        genres = [genre.get("name") for genre in self._object_list(item.get("genres")) if genre.get("name")]
+        tags = [tag.get("name") for tag in self._object_list(item.get("tags")) if tag.get("name")]
+        platform_names: list[str] = []
+        platform_release_dates: list[dict[str, object]] = []
+        for platform_entry in self._object_list(item.get("platforms")):
+            platform = platform_entry.get("platform")
+            if not isinstance(platform, dict) or not platform.get("name"):
+                continue
+            platform_name = str(platform["name"])
+            platform_names.append(platform_name)
+            platform_release_dates.append(
+                {
+                    "platform": platform_name,
+                    "release_date": self._parse_date(platform_entry.get("released_at")),
+                }
+            )
         return GameSearchResult(
             title=item.get("name") or "Untitled",
-            description=None,
+            description=item.get("description_raw") or None,
             cover_url=item.get("background_image"),
             release_date=self._parse_date(item.get("released")),
-            genres=[genre.get("name") for genre in item.get("genres", []) if genre.get("name")],
-            platforms=[
-                platform.get("platform", {}).get("name")
-                for platform in item.get("platforms", [])
-                if platform.get("platform", {}).get("name")
-            ],
+            genres=genres,
+            platforms=platform_names,
+            tags=tags,
             external_id=str(item.get("id")) if item.get("id") is not None else None,
             external_source="RAWG",
             external_url=f"https://rawg.io/games/{item.get('slug')}" if item.get("slug") else None,
             external_ratings=external_ratings,
             external_ratings_updated_at=fetched_at,
             source="RAWG",
+            release_date_tba=bool(item.get("tba")),
+            platform_release_dates=platform_release_dates,
         )
 
     @staticmethod
-    def _parse_date(value: str | None) -> date | None:
-        if not value:
+    def _object_list(value: object) -> list[dict]:
+        if not isinstance(value, list):
+            return []
+        return [item for item in value if isinstance(item, dict)]
+
+    @staticmethod
+    def _parse_date(value: object) -> date | None:
+        if not isinstance(value, str) or not value:
             return None
         try:
             return date.fromisoformat(value)

@@ -218,9 +218,20 @@ if ((-not (Test-Path -LiteralPath $RootEnv)) -and (-not (Test-Path -LiteralPath 
 }
 
 $FrontendEnv = Join-Path $FrontendDirectory ".env.local"
+$LocalApiSetting = "NEXT_PUBLIC_API_URL=/api"
 if (-not (Test-Path -LiteralPath $FrontendEnv)) {
-    Set-Content -LiteralPath $FrontendEnv -Value "NEXT_PUBLIC_API_URL=http://localhost:8000/api" -Encoding Ascii
+    Set-Content -LiteralPath $FrontendEnv -Value $LocalApiSetting -Encoding Ascii
     Write-Host "Utworzono frontend/.env.local."
+}
+else {
+    $FrontendEnvContent = Get-Content -LiteralPath $FrontendEnv -Raw
+    $MigratedFrontendEnvContent = $FrontendEnvContent `
+        -replace '(?m)^NEXT_PUBLIC_API_URL=http://(?:localhost|127\.0\.0\.1):8000/api\s*$', $LocalApiSetting
+
+    if ($MigratedFrontendEnvContent -ne $FrontendEnvContent) {
+        Set-Content -LiteralPath $FrontendEnv -Value $MigratedFrontendEnvContent.TrimEnd() -Encoding Ascii
+        Write-Host "Zmieniono lokalny adres API na /api (proxy Next.js)." -ForegroundColor Yellow
+    }
 }
 
 Invoke-ExternalCommand -Label "Sprawdzanie Docker Compose" `

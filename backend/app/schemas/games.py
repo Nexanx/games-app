@@ -60,6 +60,14 @@ class GameRead(GameBase):
 class GameSearchResult(GameBase):
     external_source: str = "RAWG"
     source: str = "RAWG"
+    tags: list[str] = Field(default_factory=list)
+    release_date_tba: bool = False
+    platform_release_dates: list["GamePlatformReleaseDate"] = Field(default_factory=list)
+
+
+class GamePlatformReleaseDate(BaseModel):
+    platform: str = Field(..., min_length=1, max_length=150)
+    release_date: date | None = None
 
 
 class GameSearchPage(BaseModel):
@@ -69,6 +77,44 @@ class GameSearchPage(BaseModel):
     page: int = Field(..., ge=1)
     page_size: int = Field(..., ge=1)
     has_next: bool = False
+
+
+class GameRecommendation(BaseModel):
+    game: GameSearchResult
+    reason: str
+    kind: Literal["personalized", "popular"]
+    score: float = 0
+
+
+class GameRecommendationsRead(BaseModel):
+    results: list[GameRecommendation] = Field(default_factory=list)
+    personalized: bool
+    notice: str | None = None
+    source: Literal["RAWG"] = "RAWG"
+
+
+class GameRecommendationFeedbackCreate(BaseModel):
+    game: GameSearchResult
+    verdict: Literal["positive", "negative"]
+
+
+class GameRecommendationFeedbackRead(BaseModel):
+    external_source: str
+    external_id: str
+    title: str
+    verdict: Literal["positive", "negative"]
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class GameReleasesPage(BaseModel):
+    results: list[GameSearchResult] = Field(default_factory=list)
+    page: int = Field(..., ge=1)
+    page_size: int = Field(..., ge=1)
+    has_next: bool = False
+    source: Literal["RAWG"] = "RAWG"
 
 
 class BacklogEntryBase(BaseModel):

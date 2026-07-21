@@ -16,6 +16,10 @@ import type {
   CompletedGamesYearReport,
   DashboardSummary,
   Game,
+  GameRecommendations,
+  GameRecommendationVerdict,
+  GameReleaseFilters,
+  GameReleasesPage,
   GameSearchPage,
   GameSearchResult,
   CompletedGameEntry,
@@ -29,7 +33,7 @@ import type {
   PoeLeagueSyncResult
 } from "@/types";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api";
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 const DEFAULT_TIMEOUT_MS = 15_000;
 const CHATBOT_TIMEOUT_MS = 75_000;
 
@@ -150,6 +154,22 @@ export const api = {
   dashboard: (signal?: AbortSignal) => request<DashboardSummary>("/dashboard/summary", { signal }),
   searchGames: (query: string, page = 1, pageSize = 10, signal?: AbortSignal) =>
     request<GameSearchPage>(`/games/search${qs({ query, page, page_size: pageSize })}`, { signal }),
+  getGameRecommendations: (signal?: AbortSignal) =>
+    request<GameRecommendations>("/games/recommendations", { signal, timeoutMs: 30_000 }),
+  saveGameRecommendationFeedback: (game: GameSearchResult, verdict: GameRecommendationVerdict) =>
+    request<{ external_source: string; external_id: string; title: string; verdict: GameRecommendationVerdict }>(
+      "/games/recommendations/feedback",
+      { method: "PUT", body: JSON.stringify({ game, verdict }) }
+    ),
+  deleteGameRecommendationFeedback: (game: GameSearchResult) =>
+    request<void>(`/games/recommendations/feedback${qs({
+      external_source: game.external_source,
+      external_id: game.external_id
+    })}`, { method: "DELETE" }),
+  getGameReleases: (filters: GameReleaseFilters, signal?: AbortSignal) =>
+    request<GameReleasesPage>(`/games/releases${qs({ ...filters })}`, { signal, timeoutMs: 30_000 }),
+  getRawgGame: (externalId: string, signal?: AbortSignal) =>
+    request<GameSearchResult>(`/games/rawg/${encodeURIComponent(externalId)}`, { signal, timeoutMs: 30_000 }),
   createGame: (payload: Partial<Game>) =>
     request<Game>("/games", { method: "POST", body: JSON.stringify(payload) }),
   listGames: () => request<Game[]>("/games"),
