@@ -10,6 +10,7 @@ from app.models import BacklogEntry, CompletedGameEntry, CustomStatistic, Game
 from app.schemas.completed_games import (
     CompletedGamesComparisonRead,
     CompletedGamesForecastRead,
+    CompletedGamesHistoryRead,
     CompletedGamesMonthComparisonRead,
     CompletedGamesYearActivityRead,
     CompletedGamesYearDashboardRead,
@@ -33,6 +34,7 @@ from app.services.completed_games_service import (
 )
 from app.services.analytics_service import (
     build_forecast,
+    build_history_summary,
     build_month_comparison,
     build_year_activity,
     build_year_report,
@@ -53,6 +55,11 @@ def list_completed_years(db: Session = Depends(get_session)) -> list[CompletedGa
         CompletedGamesYearRead(year=int(row.year), completed_games_count=int(row.completed_games_count))
         for row in rows
     ]
+
+
+@router.get("/history", response_model=CompletedGamesHistoryRead)
+def get_completed_games_history(db: Session = Depends(get_session)) -> CompletedGamesHistoryRead:
+    return build_history_summary(db)
 
 
 @router.get("", response_model=list[CompletedGameEntryRead])

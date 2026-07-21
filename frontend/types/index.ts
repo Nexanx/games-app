@@ -247,6 +247,19 @@ export interface CompletedGamesForecastPoint {
   upper_bound?: number | null;
 }
 
+export interface CompletedGamesForecastModelScore {
+  model: string;
+  mae: number;
+  rmse: number;
+  is_baseline: boolean;
+}
+
+export interface CompletedGamesForecastCumulativeYear {
+  year: number;
+  historical: CompletedGamesForecastPoint[];
+  forecast: CompletedGamesForecastPoint[];
+}
+
 export interface CompletedGamesForecast {
   metric: "completed_games" | "playtime";
   sufficient_data: boolean;
@@ -259,7 +272,33 @@ export interface CompletedGamesForecast {
   observations_count: number;
   active_months_count: number;
   source_entries_count: number;
+  years_count: number;
+  zero_months_count: number;
+  missing_source_values_count: number;
+  validation_months_count: number;
+  model_scores: CompletedGamesForecastModelScore[];
+  cumulative_years: CompletedGamesForecastCumulativeYear[];
   minimum_requirements: string;
+}
+
+export interface CompletedGamesHistoryYear {
+  year: number;
+  completed_games_count: number;
+  total_playtime_hours: number;
+  average_playtime_hours?: number | null;
+  average_rating?: number | null;
+  platforms: CompletedGamesDistributionItem[];
+  genres: CompletedGamesDistributionItem[];
+}
+
+export interface CompletedGamesHistory {
+  summary: CompletedGamesPeriodMetrics;
+  active_years_count: number;
+  best_year_by_completions?: CompletedGamesHistoryYear | null;
+  best_year_by_playtime?: CompletedGamesHistoryYear | null;
+  yearly: CompletedGamesHistoryYear[];
+  platforms: CompletedGamesDistributionItem[];
+  genres: CompletedGamesDistributionItem[];
 }
 
 export interface BacklogBatchItem {

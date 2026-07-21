@@ -49,4 +49,13 @@ describe("application UI configuration", () => {
     expect(search).not.toContain('onKeyDown={(event) => event.key === "Enter" && startSearch()}');
     expect(search).toContain('<Button type="button" onClick={addSelected}');
   });
+
+  it("exposes all-history analytics as a separate mode instead of a synthetic year", () => {
+    const yearlyAnalytics = readProjectFile("app/analytics/[year]/page.tsx");
+    const historyAnalytics = readProjectFile("app/analytics/history/page.tsx");
+
+    expect(yearlyAnalytics).toContain('href="/analytics/history"');
+    expect(historyAnalytics).toContain("Analizy — Cała historia");
+    expect(historyAnalytics).toContain("<AnalyticsHistory />");
+  });
 });

@@ -8,6 +8,7 @@ import type {
   ChatStatus,
   CompletedGamesComparison,
   CompletedGamesForecast,
+  CompletedGamesHistory,
   CompletedGamesFilters,
   CompletedGamesMonthComparison,
   CompletedGamesYearActivity,
@@ -165,6 +166,7 @@ export const api = {
   reorderBacklog: (ordered_ids: number[]) =>
     request<BacklogEntry[]>("/backlog/reorder", { method: "POST", body: JSON.stringify({ ordered_ids }) }),
   listCompletedYears: (signal?: AbortSignal) => request<CompletedGamesYear[]>("/completed-games/years", { signal }),
+  getCompletedGamesHistory: (signal?: AbortSignal) => request<CompletedGamesHistory>("/completed-games/history", { signal, timeoutMs: 30_000 }),
   listCompletedGames: (year: number, filters: CompletedGamesFilters = {}, signal?: AbortSignal) =>
     request<CompletedGameEntry[]>(`/completed-games${qs({ year, ...filters })}`, { signal }),
   getCompletedYearDashboard: (year: number, filters: CompletedGamesFilters = {}, signal?: AbortSignal) =>

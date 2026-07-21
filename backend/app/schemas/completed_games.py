@@ -162,6 +162,19 @@ class CompletedGamesForecastPointRead(BaseModel):
     upper_bound: float | None = None
 
 
+class CompletedGamesForecastModelScoreRead(BaseModel):
+    model: str
+    mae: float
+    rmse: float
+    is_baseline: bool = False
+
+
+class CompletedGamesForecastCumulativeYearRead(BaseModel):
+    year: int
+    historical: list[CompletedGamesForecastPointRead] = Field(default_factory=list)
+    forecast: list[CompletedGamesForecastPointRead] = Field(default_factory=list)
+
+
 class CompletedGamesForecastRead(BaseModel):
     metric: str
     sufficient_data: bool
@@ -174,4 +187,30 @@ class CompletedGamesForecastRead(BaseModel):
     observations_count: int = 0
     active_months_count: int = 0
     source_entries_count: int = 0
+    years_count: int = 0
+    zero_months_count: int = 0
+    missing_source_values_count: int = 0
+    validation_months_count: int = 0
+    model_scores: list[CompletedGamesForecastModelScoreRead] = Field(default_factory=list)
+    cumulative_years: list[CompletedGamesForecastCumulativeYearRead] = Field(default_factory=list)
     minimum_requirements: str
+
+
+class CompletedGamesHistoryYearRead(BaseModel):
+    year: int
+    completed_games_count: int = 0
+    total_playtime_hours: float = 0
+    average_playtime_hours: float | None = None
+    average_rating: float | None = None
+    platforms: list[CompletedGamesDistributionItemRead] = Field(default_factory=list)
+    genres: list[CompletedGamesDistributionItemRead] = Field(default_factory=list)
+
+
+class CompletedGamesHistoryRead(BaseModel):
+    summary: CompletedGamesPeriodMetricsRead
+    active_years_count: int = 0
+    best_year_by_completions: CompletedGamesHistoryYearRead | None = None
+    best_year_by_playtime: CompletedGamesHistoryYearRead | None = None
+    yearly: list[CompletedGamesHistoryYearRead] = Field(default_factory=list)
+    platforms: list[CompletedGamesDistributionItemRead] = Field(default_factory=list)
+    genres: list[CompletedGamesDistributionItemRead] = Field(default_factory=list)

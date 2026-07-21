@@ -6,15 +6,20 @@ from math import sqrt
 from statistics import median
 from typing import Iterable
 
-from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy import case, desc, func, select
+from sqlalchemy.orm import Session, joinedload
 
-from app.models import CompletedGameEntry
+from app.models import CompletedGameEntry, Game
 from app.schemas.completed_games import (
     CompletedGameHighlightRead,
     CompletedGamesDayActivityRead,
+    CompletedGamesDistributionItemRead,
     CompletedGamesForecastPointRead,
+    CompletedGamesForecastCumulativeYearRead,
+    CompletedGamesForecastModelScoreRead,
     CompletedGamesForecastRead,
+    CompletedGamesHistoryRead,
+    CompletedGamesHistoryYearRead,
     CompletedGamesMonthComparisonRead,
     CompletedGamesMonthPeriodRead,
     CompletedGamesPeriodDifferenceRead,
@@ -29,7 +34,7 @@ from app.services.completed_games_service import (
     _rounded,
 )
 
-FORECAST_REQUIREMENTS = "Co najmniej 12 miesięcy obserwacji, 6 aktywnych miesięcy i 12 odpowiednich wpisów."
+FORECAST_REQUIREMENTS = "Co najmniej 12 miesięcy obserwacji, 2 lata, 6 aktywnych miesięcy i 12 odpowiednich wpisów."
 
 
 def build_period_metrics(entries: Iterable[CompletedGameEntry]) -> CompletedGamesPeriodMetricsRead:
@@ -149,42 +154,168 @@ def build_forecast(db: Session, metric: str, months_ahead: int, today: date | No
         values.append(float(len(month_entries)) if metric == "completed_games" else sum(entry.playtime_hours for entry in month_entries if entry.playtime_hours > 0))
     active_months = sum(value > 0 for value in values)
     source_entries = len(historical_entries) if metric == "completed_games" else sum(entry.playtime_hours > 0 for entry in historical_entries)
+    years_count = len({period.year for period in periods})
+    zero_months_count = sum(value == 0 for value in values)
+    missing_source_values_count = 0 if metric == "completed_games" else sum(entry.playtime_hours <= 0 for entry in historical_entries)
     historical = [CompletedGamesForecastPointRead(period=_period_label(period), value=_rounded(value)) for period, value in zip(periods, values)]
-    if len(values) < 12 or active_months < 6 or source_entries < 12:
+    if len(values) < 12 or years_count < 2 or active_months < 6 or source_entries < 12:
         return CompletedGamesForecastRead(
             metric=metric, sufficient_data=False,
             reason="Za mało danych do przygotowania wiarygodnej prognozy. Dodaj więcej ukończonych gier lub wybierz dłuższy okres.",
             historical=historical, observations_count=len(values), active_months_count=active_months,
-            source_entries_count=source_entries, minimum_requirements=FORECAST_REQUIREMENTS,
+            source_entries_count=source_entries, years_count=years_count, zero_months_count=zero_months_count,
+            missing_source_values_count=missing_source_values_count, minimum_requirements=FORECAST_REQUIREMENTS,
         )
     holdout = min(3, max(1, len(values) // 4))
     train = values[:-holdout]
     actual = values[-holdout:]
-    linear_predictions = [_linear_predict(train, len(train) + index) for index in range(holdout)]
-    moving_predictions = [_moving_average(values[:len(train) + index]) for index in range(holdout)]
-    linear_mae, linear_rmse = _errors(actual, linear_predictions)
-    moving_mae, moving_rmse = _errors(actual, moving_predictions)
-    if moving_mae <= linear_mae:
-        model = "Średnia ruchoma (3 miesiące)"
-        mae, rmse = moving_mae, moving_rmse
-        predictor = lambda index: _moving_average(values)
-    else:
-        model = "Regresja liniowa"
-        mae, rmse = linear_mae, linear_rmse
-        predictor = lambda index: _linear_predict(values, len(values) + index)
+    candidates = ["Ostatnia wartość", "Średnia ruchoma (3 miesiące)", "Regresja liniowa"]
+    scores: list[CompletedGamesForecastModelScoreRead] = []
+    for candidate in candidates:
+        predictions = [
+            max(0, _model_predict(candidate, values[: len(train) + index]))
+            for index in range(holdout)
+        ]
+        candidate_mae, candidate_rmse = _errors(actual, predictions)
+        scores.append(CompletedGamesForecastModelScoreRead(
+            model=candidate,
+            mae=_rounded(candidate_mae),
+            rmse=_rounded(candidate_rmse),
+            is_baseline=candidate == "Ostatnia wartość",
+        ))
+    selected = min(scores, key=lambda score: (score.mae, score.rmse, candidates.index(score.model)))
+    model = selected.model
+    mae, rmse = selected.mae, selected.rmse
     future_periods = _month_range(_next_month(last), _add_months(last, months_ahead))
     forecast = []
-    for index, period in enumerate(future_periods):
-        prediction = max(0, predictor(index))
+    future_history = list(values)
+    for period in future_periods:
+        prediction = max(0, _model_predict(model, future_history))
         spread = 1.96 * rmse
         forecast.append(CompletedGamesForecastPointRead(
             period=_period_label(period), value=_rounded(prediction),
             lower_bound=_rounded(max(0, prediction - spread)), upper_bound=_rounded(prediction + spread),
         ))
+        future_history.append(prediction)
+    cumulative_years = (
+        _cumulative_playtime_years(periods, values, future_periods, forecast)
+        if metric == "playtime"
+        else []
+    )
     return CompletedGamesForecastRead(
         metric=metric, sufficient_data=True, model=model, historical=historical, forecast=forecast,
         mae=_rounded(mae), rmse=_rounded(rmse), observations_count=len(values), active_months_count=active_months,
-        source_entries_count=source_entries, minimum_requirements=FORECAST_REQUIREMENTS,
+        source_entries_count=source_entries, years_count=years_count, zero_months_count=zero_months_count,
+        missing_source_values_count=missing_source_values_count, validation_months_count=holdout,
+        model_scores=scores, cumulative_years=cumulative_years, minimum_requirements=FORECAST_REQUIREMENTS,
+    )
+
+
+def build_history_summary(db: Session) -> CompletedGamesHistoryRead:
+    year_expression = func.extract("year", CompletedGameEntry.completion_date)
+    timed_value = case((CompletedGameEntry.playtime_hours > 0, CompletedGameEntry.playtime_hours), else_=None)
+    yearly_rows = db.execute(
+        select(
+            year_expression.label("year"),
+            func.count(CompletedGameEntry.id).label("completed_games_count"),
+            func.coalesce(func.sum(timed_value), 0).label("total_playtime_hours"),
+            func.avg(timed_value).label("average_playtime_hours"),
+            func.avg(CompletedGameEntry.rating).label("average_rating"),
+        )
+        .group_by(year_expression)
+        .order_by(year_expression)
+    ).all()
+
+    if not yearly_rows:
+        return CompletedGamesHistoryRead(summary=CompletedGamesPeriodMetricsRead())
+
+    aggregate = db.execute(
+        select(
+            func.count(CompletedGameEntry.id).label("completed_games_count"),
+            func.coalesce(func.sum(timed_value), 0).label("total_playtime_hours"),
+            func.avg(timed_value).label("average_playtime_hours"),
+            func.count(timed_value).label("games_with_playtime_count"),
+            func.avg(CompletedGameEntry.rating).label("average_rating"),
+            func.count(CompletedGameEntry.rating).label("rated_games_count"),
+        )
+    ).one()
+    ratings = list(db.scalars(
+        select(CompletedGameEntry.rating)
+        .where(CompletedGameEntry.rating.is_not(None))
+        .order_by(CompletedGameEntry.rating)
+    ).all())
+    playtimes = list(db.scalars(
+        select(CompletedGameEntry.playtime_hours)
+        .where(CompletedGameEntry.playtime_hours > 0)
+        .order_by(CompletedGameEntry.playtime_hours)
+    ).all())
+    category_rows = db.execute(
+        select(
+            year_expression.label("year"),
+            CompletedGameEntry.platform,
+            CompletedGameEntry.playtime_hours,
+            CompletedGameEntry.rating,
+            Game.genres,
+        ).join(Game, Game.id == CompletedGameEntry.game_id)
+    ).all()
+    platforms, platforms_by_year = _history_distributions(category_rows, kind="platform")
+    genres, genres_by_year = _history_distributions(category_rows, kind="genre")
+    best_rated = db.scalars(
+        select(CompletedGameEntry)
+        .join(Game, Game.id == CompletedGameEntry.game_id)
+        .options(joinedload(CompletedGameEntry.game))
+        .where(CompletedGameEntry.rating.is_not(None))
+        .order_by(desc(CompletedGameEntry.rating), desc(CompletedGameEntry.completion_date), Game.title, CompletedGameEntry.id)
+        .limit(1)
+    ).first()
+    longest = db.scalars(
+        select(CompletedGameEntry)
+        .join(Game, Game.id == CompletedGameEntry.game_id)
+        .options(joinedload(CompletedGameEntry.game))
+        .where(CompletedGameEntry.playtime_hours > 0)
+        .order_by(desc(CompletedGameEntry.playtime_hours), desc(CompletedGameEntry.completion_date), Game.title, CompletedGameEntry.id)
+        .limit(1)
+    ).first()
+
+    yearly = [
+        CompletedGamesHistoryYearRead(
+            year=int(row.year),
+            completed_games_count=int(row.completed_games_count),
+            total_playtime_hours=_rounded(row.total_playtime_hours),
+            average_playtime_hours=_rounded(row.average_playtime_hours) if row.average_playtime_hours is not None else None,
+            average_rating=_rounded(row.average_rating) if row.average_rating is not None else None,
+            platforms=platforms_by_year.get(int(row.year), []),
+            genres=genres_by_year.get(int(row.year), []),
+        )
+        for row in yearly_rows
+    ]
+    completed_games_count = int(aggregate.completed_games_count)
+    rated_games_count = int(aggregate.rated_games_count)
+    summary = CompletedGamesPeriodMetricsRead(
+        completed_games_count=completed_games_count,
+        total_playtime_hours=_rounded(aggregate.total_playtime_hours),
+        average_playtime_hours=_rounded(aggregate.average_playtime_hours) if aggregate.average_playtime_hours is not None else None,
+        median_playtime_hours=_rounded(median(playtimes)) if playtimes else None,
+        games_with_playtime_count=int(aggregate.games_with_playtime_count),
+        average_rating=_rounded(aggregate.average_rating) if aggregate.average_rating is not None else None,
+        median_rating=_rounded(median(ratings)) if ratings else None,
+        rated_games_count=rated_games_count,
+        unrated_games_count=completed_games_count - rated_games_count,
+        unique_platforms_count=len([item for item in platforms if item.label != "Brak platformy"]),
+        unique_genres_count=len([item for item in genres if item.label != "Brak gatunku"]),
+        top_platform=next((item for item in platforms if item.label != "Brak platformy"), None),
+        top_genre=next((item for item in genres if item.label != "Brak gatunku"), None),
+        best_rated_game=_highlight(best_rated),
+        longest_game=_highlight(longest),
+    )
+    return CompletedGamesHistoryRead(
+        summary=summary,
+        active_years_count=len(yearly),
+        best_year_by_completions=max(yearly, key=lambda item: (item.completed_games_count, item.total_playtime_hours, item.year)),
+        best_year_by_playtime=max(yearly, key=lambda item: (item.total_playtime_hours, item.completed_games_count, item.year)),
+        yearly=yearly,
+        platforms=platforms,
+        genres=genres,
     )
 
 
@@ -279,6 +410,112 @@ def _linear_predict(values: list[float], x: int) -> float:
 def _moving_average(values: list[float]) -> float:
     window = values[-3:]
     return sum(window) / len(window) if window else 0
+
+
+def _model_predict(model: str, values: list[float]) -> float:
+    if not values:
+        return 0
+    if model == "Ostatnia wartość":
+        return values[-1]
+    if model == "Średnia ruchoma (3 miesiące)":
+        return _moving_average(values)
+    return _linear_predict(values, len(values))
+
+
+def _cumulative_playtime_years(
+    historical_periods: list[date],
+    historical_values: list[float],
+    future_periods: list[date],
+    forecast: list[CompletedGamesForecastPointRead],
+) -> list[CompletedGamesForecastCumulativeYearRead]:
+    result: list[CompletedGamesForecastCumulativeYearRead] = []
+    for year in sorted({period.year for period in future_periods}):
+        running = 0.0
+        historical: list[CompletedGamesForecastPointRead] = []
+        for period, value in zip(historical_periods, historical_values):
+            if period.year != year:
+                continue
+            running += max(0, value)
+            historical.append(CompletedGamesForecastPointRead(period=_period_label(period), value=_rounded(running)))
+
+        lower_running = running
+        upper_running = running
+        projected: list[CompletedGamesForecastPointRead] = []
+        for period, point in zip(future_periods, forecast):
+            if period.year != year:
+                continue
+            running += max(0, point.value)
+            lower_running += max(0, point.lower_bound or 0)
+            upper_running += max(0, point.upper_bound or point.value)
+            projected.append(CompletedGamesForecastPointRead(
+                period=point.period,
+                value=_rounded(running),
+                lower_bound=_rounded(lower_running),
+                upper_bound=_rounded(max(upper_running, running)),
+            ))
+        result.append(CompletedGamesForecastCumulativeYearRead(
+            year=year,
+            historical=historical,
+            forecast=projected,
+        ))
+    return result
+
+
+def _history_distributions(rows, *, kind: str):
+    all_groups: dict[str, dict[str, object]] = {}
+    yearly_groups: dict[int, dict[str, dict[str, object]]] = defaultdict(dict)
+    year_entry_counts: dict[int, int] = defaultdict(int)
+    total_entries = len(rows)
+    for row in rows:
+        year = int(row.year)
+        year_entry_counts[year] += 1
+        if kind == "platform":
+            labels = [row.platform.strip()] if row.platform and row.platform.strip() else ["Brak platformy"]
+        else:
+            labels = [value.strip() for value in (row.genres or []) if value.strip()] or ["Brak gatunku"]
+        for label in dict.fromkeys(labels):
+            key = label.casefold()
+            _add_distribution_value(all_groups, key, label, row.playtime_hours, row.rating)
+            _add_distribution_value(yearly_groups[year], key, label, row.playtime_hours, row.rating)
+    overall = _distribution_values(all_groups, total_entries)
+    yearly = {
+        year: _distribution_values(groups, year_entry_counts[year])
+        for year, groups in yearly_groups.items()
+    }
+    return overall, yearly
+
+
+def _add_distribution_value(
+    groups: dict[str, dict[str, object]],
+    key: str,
+    label: str,
+    playtime: float,
+    rating: float | None,
+) -> None:
+    group = groups.setdefault(key, {"label": label, "count": 0, "playtime": 0.0, "ratings": []})
+    group["count"] = int(group["count"]) + 1
+    if playtime > 0:
+        group["playtime"] = float(group["playtime"]) + playtime
+    if rating is not None:
+        group["ratings"].append(rating)
+
+
+def _distribution_values(
+    groups: dict[str, dict[str, object]],
+    entries_count: int,
+) -> list[CompletedGamesDistributionItemRead]:
+    result = []
+    for group in groups.values():
+        ratings = group["ratings"]
+        count = int(group["count"])
+        result.append(CompletedGamesDistributionItemRead(
+            label=str(group["label"]),
+            completed_games_count=count,
+            percentage=_rounded(count * 100 / entries_count) if entries_count else None,
+            total_playtime_hours=_rounded(float(group["playtime"])),
+            average_rating=_rounded(sum(ratings) / len(ratings)) if ratings else None,
+        ))
+    return sorted(result, key=lambda item: (-item.completed_games_count, item.label.casefold()))
 
 
 def _errors(actual: list[float], predicted: list[float]) -> tuple[float, float]:
