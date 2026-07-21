@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Filter, Plus, X } from "lucide-react";
+import { ChevronDown, Filter, Plus, X } from "lucide-react";
 
 import { CompletedGameCard } from "@/components/games/CompletedGameCard";
 import { YearNavigation } from "@/components/games/YearNavigation";
@@ -18,6 +18,7 @@ import {
   completedYearFiltersFromSearchParams,
   completedYearFiltersToSearchParams,
   currentCompletedGamesYear,
+  getCompletedYearFiltersError,
   groupCompletedGamesByMonth,
   hasCompletedYearFilters,
   type CompletedYearFilters
@@ -45,6 +46,7 @@ export default function CompletedGamesYearPage() {
     [filterQuery]
   );
   const filtersActive = hasCompletedYearFilters(filters);
+  const filtersError = getCompletedYearFiltersError(filters);
 
   const [entries, setEntries] = useState<CompletedGameEntry[]>([]);
   const [years, setYears] = useState<CompletedGamesYear[]>([]);
@@ -54,9 +56,16 @@ export default function CompletedGamesYearPage() {
   const [entriesError, setEntriesError] = useState<string | null>(null);
   const [metadataError, setMetadataError] = useState<string | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [collapsedMonths, setCollapsedMonths] = useState<Set<number>>(() => new Set());
 
   useEffect(() => {
     if (!validYear) return;
+    if (filtersError) {
+      setEntries([]);
+      setEntriesError(null);
+      setEntriesLoading(false);
+      return;
+    }
 
     const controller = new AbortController();
     setEntriesLoading(true);
@@ -67,7 +76,11 @@ export default function CompletedGamesYearPage() {
         platform: filters.platforms,
         genre: filters.genres,
         rating_min: filters.ratingMin,
-        rating_max: filters.ratingMax
+        rating_max: filters.ratingMax,
+        date_from: filters.dateFrom,
+        date_to: filters.dateTo,
+        playtime_min: filters.playtimeMin,
+        playtime_max: filters.playtimeMax
       }, controller.signal)
       .then((result) => {
         setEntries(result);
@@ -82,7 +95,7 @@ export default function CompletedGamesYearPage() {
       });
 
     return () => controller.abort();
-  }, [filterQuery, filters.genres, filters.month, filters.platforms, filters.ratingMax, filters.ratingMin, validYear, year]);
+  }, [filterQuery, filters.dateFrom, filters.dateTo, filters.genres, filters.month, filters.platforms, filters.playtimeMax, filters.playtimeMin, filters.ratingMax, filters.ratingMin, filtersError, validYear, year]);
 
   useEffect(() => {
     if (!validYear) return;
@@ -141,12 +154,22 @@ export default function CompletedGamesYearPage() {
   function updateRating(bound: "ratingMin" | "ratingMax", rawValue: string) {
     const parsed = rawValue === "" ? undefined : Number(rawValue);
     const value = typeof parsed === "number" && Number.isFinite(parsed) && parsed >= 0 && parsed <= 10 ? parsed : undefined;
-    const nextFilters = { ...filters, [bound]: value };
-    if (nextFilters.ratingMin !== undefined && nextFilters.ratingMax !== undefined && nextFilters.ratingMin > nextFilters.ratingMax) {
-      if (bound === "ratingMin") nextFilters.ratingMax = undefined;
-      else nextFilters.ratingMin = undefined;
-    }
-    updateFilters(nextFilters);
+    updateFilters({ ...filters, [bound]: value });
+  }
+
+  function updatePlaytime(bound: "playtimeMin" | "playtimeMax", rawValue: string) {
+    const parsed = rawValue === "" ? undefined : Number(rawValue);
+    const value = typeof parsed === "number" && Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined;
+    updateFilters({ ...filters, [bound]: value });
+  }
+
+  function toggleMonth(month: number) {
+    setCollapsedMonths((current) => {
+      const next = new Set(current);
+      if (next.has(month)) next.delete(month);
+      else next.add(month);
+      return next;
+    });
   }
 
   return (
@@ -155,7 +178,7 @@ export default function CompletedGamesYearPage() {
         <div>
           <p className="text-sm font-semibold text-primary">Historia roczna</p>
           <h1 className="mt-1 text-2xl font-bold sm:text-3xl">Ukończone gry — {year}</h1>
-          <p className="mt-2 text-sm text-muted-foreground">{completedCount == null ? "Ładowanie liczby ukończeń…" : completedGamesLabel(completedCount)}{filtersActive ? ` · po filtrach: ${entries.length}` : ""}</p>
+          <p className="mt-2 text-sm text-muted-foreground">{completedCount == null ? "Ładowanie liczby ukończeń…" : completedGamesLabel(completedCount)} · {entriesLoading ? "aktualizowanie wyników…" : `wyświetlono: ${entries.length}`}</p>
         </div>
         <div className="flex flex-col items-start gap-3 lg:items-end">
           <Link href="/completed-games/new"><Button><Plus className="h-4 w-4" aria-hidden="true" />Dodaj grę</Button></Link>
@@ -220,22 +243,64 @@ export default function CompletedGamesYearPage() {
                 </label>
               </div>
             </fieldset>
+            <div className="grid gap-5 lg:grid-cols-2">
+              <fieldset>
+                <legend className="text-sm font-semibold">Data ukończenia</legend>
+                <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                  <label className="space-y-1.5 text-sm text-muted-foreground">
+                    <span>Od</span>
+                    <Input type="date" min={`${year}-01-01`} max={`${year}-12-31`} value={filters.dateFrom ?? ""} onChange={(event) => updateFilters({ ...filters, dateFrom: event.target.value || undefined })} />
+                  </label>
+                  <label className="space-y-1.5 text-sm text-muted-foreground">
+                    <span>Do</span>
+                    <Input type="date" min={`${year}-01-01`} max={`${year}-12-31`} value={filters.dateTo ?? ""} onChange={(event) => updateFilters({ ...filters, dateTo: event.target.value || undefined })} />
+                  </label>
+                </div>
+              </fieldset>
+              <fieldset>
+                <legend className="text-sm font-semibold">Czas gry w godzinach</legend>
+                <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                  <label className="space-y-1.5 text-sm text-muted-foreground">
+                    <span>Minimum</span>
+                    <Input type="number" min={0} step="any" value={filters.playtimeMin ?? ""} onChange={(event) => updatePlaytime("playtimeMin", event.target.value)} placeholder="np. 5" />
+                  </label>
+                  <label className="space-y-1.5 text-sm text-muted-foreground">
+                    <span>Maksimum</span>
+                    <Input type="number" min={0} step="any" value={filters.playtimeMax ?? ""} onChange={(event) => updatePlaytime("playtimeMax", event.target.value)} placeholder="np. 100" />
+                  </label>
+                </div>
+              </fieldset>
+            </div>
           </CardContent>
         </Card>
       ) : null}
 
+      {filtersError ? <p className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive" role="alert">{filtersError}</p> : null}
+
       {entriesError ? <ErrorState message={entriesError} /> : null}
       {entriesLoading ? <LoadingState label="Aktualizowanie listy gier" /> : null}
-      {!entriesLoading && !entriesError && !entries.length ? (
+      {!entriesLoading && !entriesError && !filtersError && !entries.length ? (
         <EmptyState
           title={filtersActive ? "Brak gier spełniających wybrane filtry" : `Brak ukończonych gier w ${year} roku`}
           description={filtersActive ? "Wyczyść filtry albo wybierz inne kryteria." : "Dodaj pierwszy wpis z datą ukończenia w tym roku."}
         />
       ) : null}
-      {!entriesLoading && !entriesError ? monthGroups.map((group) => (
+      {!entriesLoading && !entriesError && !filtersError ? monthGroups.map((group) => (
         <section key={group.month} className="space-y-3" aria-labelledby={`month-${group.month}`}>
-          <div className="flex items-baseline justify-between border-b border-border pb-2"><h2 id={`month-${group.month}`} className="text-xl font-bold">{group.label}</h2><span className="text-sm text-muted-foreground">{group.entries.length} gier</span></div>
-          <div className="space-y-3">{group.entries.map((entry) => <CompletedGameCard key={entry.id} entry={entry} />)}</div>
+          <h2 id={`month-${group.month}`} className="border-b border-border">
+            <button
+              type="button"
+              className="flex min-h-12 w-full items-center gap-3 rounded-md pb-2 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              aria-expanded={!collapsedMonths.has(group.month)}
+              aria-controls={`month-games-${group.month}`}
+              onClick={() => toggleMonth(group.month)}
+            >
+              <ChevronDown className={`h-5 w-5 shrink-0 transition-transform ${collapsedMonths.has(group.month) ? "-rotate-90" : ""}`} aria-hidden="true" />
+              <span className="text-xl font-bold">{group.label}</span>
+              <span className="ml-auto text-sm font-normal text-muted-foreground">{gamesCountLabel(group.entries.length)}</span>
+            </button>
+          </h2>
+          {!collapsedMonths.has(group.month) ? <div id={`month-games-${group.month}`} className="space-y-3">{group.entries.map((entry) => <CompletedGameCard key={entry.id} entry={entry} />)}</div> : null}
         </section>
       )) : null}
 
@@ -278,10 +343,20 @@ function getActiveFiltersCount(filters: CompletedYearFilters) {
     + filters.platforms.length
     + filters.genres.length
     + Number(filters.ratingMin !== undefined)
-    + Number(filters.ratingMax !== undefined);
+    + Number(filters.ratingMax !== undefined)
+    + Number(Boolean(filters.dateFrom))
+    + Number(Boolean(filters.dateTo))
+    + Number(filters.playtimeMin !== undefined)
+    + Number(filters.playtimeMax !== undefined);
 }
 
 function completedGamesLabel(count: number) { return count === 1 ? "1 ukończona gra" : `${count} ukończonych gier`; }
+
+function gamesCountLabel(count: number) {
+  if (count === 1) return "1 gra";
+  if (count >= 2 && count <= 4) return `${count} gry`;
+  return `${count} gier`;
+}
 
 function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;

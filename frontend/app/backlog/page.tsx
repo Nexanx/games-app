@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Filter, Plus, RefreshCw, Search } from "lucide-react";
+import { Filter, Plus, Search } from "lucide-react";
 
 import { BacklogList } from "@/components/games/BacklogList";
 import { GameForm } from "@/components/games/GameForm";
@@ -18,6 +18,7 @@ import type { BacklogEntry } from "@/types";
 export default function BacklogPage() {
   const [entries, setEntries] = useState<BacklogEntry[]>([]);
   const [sort, setSort] = useState("position");
+  const [direction, setDirection] = useState<"asc" | "desc">("desc");
   const [search, setSearch] = useState("");
   const [openPanel, setOpenPanel] = useState<"search" | "manual" | null>(null);
   const [searchBacklogEntries, setSearchBacklogEntries] = useState<BacklogEntry[]>([]);
@@ -32,7 +33,7 @@ export default function BacklogPage() {
     setLoading(true);
     setError(null);
     try {
-      setEntries(await api.listBacklog({ sort, search }));
+      setEntries(await api.listBacklog({ sort, direction, search }));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Błąd pobierania listy Do ogrania");
     } finally {
@@ -44,7 +45,7 @@ export default function BacklogPage() {
     void load();
     // Search is applied explicitly with Enter or the filter button.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sort]);
+  }, [sort, direction]);
 
   async function refreshSearchBacklog() {
     try {
@@ -112,7 +113,7 @@ export default function BacklogPage() {
       </section>
 
       <Card>
-        <CardContent className="grid gap-3 p-3 sm:p-4 lg:grid-cols-[1fr_200px_auto]">
+        <CardContent className="grid gap-3 p-3 sm:grid-cols-2 sm:p-4 lg:grid-cols-[1fr_200px_160px_auto]">
           <Input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
@@ -122,16 +123,16 @@ export default function BacklogPage() {
           <Select value={sort} onChange={(event) => setSort(event.target.value)} aria-label="Sortowanie">
             <option value="position">Własna kolejność</option>
             <option value="added">Data dodania</option>
+            <option value="title">Tytuł</option>
           </Select>
-          <div className="flex gap-2">
-            <Button className="flex-1" onClick={() => void load()}>
-              <Filter className="h-4 w-4" aria-hidden="true" />
-              Filtruj
-            </Button>
-            <Button variant="secondary" onClick={() => void load()} title="Odśwież">
-              <RefreshCw className="h-4 w-4" aria-hidden="true" />
-            </Button>
-          </div>
+          <Select value={direction} onChange={(event) => setDirection(event.target.value as "asc" | "desc")} aria-label="Kierunek sortowania" disabled={sort === "position"}>
+            <option value="asc">Rosnąco</option>
+            <option value="desc">Malejąco</option>
+          </Select>
+          <Button onClick={() => void load()}>
+            <Filter className="h-4 w-4" aria-hidden="true" />
+            Filtruj
+          </Button>
         </CardContent>
       </Card>
 

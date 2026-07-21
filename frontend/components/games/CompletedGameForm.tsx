@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Search, Save } from "lucide-react";
 
@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { todayAsInputValue } from "@/lib/completed-games";
+import { ratingAfterWheel, todayAsInputValue } from "@/lib/completed-games";
 import { splitList } from "@/lib/utils";
 import { api } from "@/services/api";
 import type { BacklogEntry, CompletedGameEntry, CustomStatistic, GameSearchResult } from "@/types";
@@ -51,13 +51,20 @@ export function CompletedGameForm({ entry }: { entry?: CompletedGameEntry }) {
   const [results, setResults] = useState<GameSearchResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [completionDate, setCompletionDate] = useState(entry?.completion_date || todayAsInputValue());
-  const [playtimeHours, setPlaytimeHours] = useState(entry ? String(entry.playtime_hours) : "");
+  const [playtimeHours, setPlaytimeHours] = useState(entry?.playtime_hours ? String(entry.playtime_hours) : "");
   const [rating, setRating] = useState(entry?.rating == null ? "" : String(entry.rating));
   const [platform, setPlatform] = useState(entry?.platform || "");
   const [review, setReview] = useState(entry?.review || "");
   const [statistics, setStatistics] = useState<CustomStatistic[]>(entry?.custom_statistics || []);
   const [saving, setSaving] = useState(false);
+  const [saveAttempted, setSaveAttempted] = useState(false);
+  const [confirmMissing, setConfirmMissing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const playtimeInputRef = useRef<HTMLInputElement>(null);
+  const ratingInputRef = useRef<HTMLInputElement>(null);
+
+  const missingPlaytime = playtimeHours.trim() === "" || Number(playtimeHours.replace(",", ".")) === 0;
+  const missingRating = rating.trim() === "";
 
   const selectedBacklog = useMemo(
     () => backlogEntries.find((backlogEntry) => String(backlogEntry.id) === backlogId),
@@ -78,6 +85,20 @@ export function CompletedGameForm({ entry }: { entry?: CompletedGameEntry }) {
     if (!selectedBacklog) return;
     setPlatform(selectedBacklog.preferred_platform || selectedBacklog.game.platforms[0] || "");
   }, [selectedBacklog]);
+
+  useEffect(() => {
+    const input = ratingInputRef.current;
+    if (!input) return;
+
+    const handleWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      if (event.deltaY === 0) return;
+      setRating((current) => ratingAfterWheel(current, event.deltaY));
+    };
+
+    input.addEventListener("wheel", handleWheel, { passive: false });
+    return () => input.removeEventListener("wheel", handleWheel);
+  }, []);
 
   async function searchGames() {
     if (!query.trim()) return;
@@ -110,8 +131,11 @@ export function CompletedGameForm({ entry }: { entry?: CompletedGameEntry }) {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setSaveAttempted(true);
     setError(null);
-    const hours = Number(playtimeHours.replace(",", "."));
+    const submitter = (event.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
+    const allowMissing = submitter?.dataset.allowMissing === "true";
+    const hours = missingPlaytime ? 0 : Number(playtimeHours.replace(",", "."));
     const parsedRating = rating === "" ? null : Number(rating.replace(",", "."));
     if (!completionDate) return setError("Wybierz datę ukończenia.");
     if (!Number.isFinite(hours) || hours < 0) return setError("Czas gry musi być liczbą równą lub większą od zera.");
@@ -124,7 +148,12 @@ export function CompletedGameForm({ entry }: { entry?: CompletedGameEntry }) {
     if (statistics.some((statistic) => statistic.value_type === "number" && !Number.isFinite(Number(statistic.value)))) {
       return setError("Wartość statystyki liczbowej musi być liczbą.");
     }
+    if ((missingPlaytime || missingRating) && !allowMissing) {
+      setConfirmMissing(true);
+      return;
+    }
 
+    setConfirmMissing(false);
     setSaving(true);
     try {
       const custom_statistics = statistics.map(({ name, value, value_type }) => ({ name: name.trim(), value, value_type }));
@@ -252,12 +281,34 @@ export function CompletedGameForm({ entry }: { entry?: CompletedGameEntry }) {
         <CardContent className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Field label="Data ukończenia" htmlFor="completion-date"><Input id="completion-date" type="date" required value={completionDate} onChange={(event) => setCompletionDate(event.target.value)} /></Field>
-            <Field label="Czas gry w godzinach" htmlFor="playtime-hours"><Input id="playtime-hours" type="number" min={0} step="any" required value={playtimeHours} onChange={(event) => setPlaytimeHours(event.target.value)} placeholder="25.5" /></Field>
-            <Field label="Ocena (0–10)" htmlFor="rating"><Input id="rating" type="number" min={0} max={10} step={0.5} value={rating} onChange={(event) => setRating(event.target.value)} /></Field>
+            <Field label="Czas gry w godzinach" htmlFor="playtime-hours" warning={saveAttempted && missingPlaytime ? "Nie podano czasu gry." : undefined}>
+              <Input ref={playtimeInputRef} id="playtime-hours" type="number" min={0} step="any" value={playtimeHours} onChange={(event) => setPlaytimeHours(event.target.value)} placeholder="25.5" aria-invalid={saveAttempted && missingPlaytime} className={saveAttempted && missingPlaytime ? "border-destructive focus:border-destructive" : undefined} />
+            </Field>
+            <Field label="Ocena (0–10)" htmlFor="rating" warning={saveAttempted && missingRating ? "Nie podano oceny." : undefined}>
+              <Input ref={ratingInputRef} id="rating" type="number" min={0} max={10} step={0.5} value={rating} onChange={(event) => setRating(event.target.value)} aria-invalid={saveAttempted && missingRating} className={saveAttempted && missingRating ? "border-destructive focus:border-destructive" : undefined} />
+            </Field>
             <Field label="Platforma" htmlFor="platform"><Input id="platform" value={platform} onChange={(event) => setPlatform(event.target.value)} placeholder="PC" /></Field>
           </div>
           <Field label="Notatka lub recenzja" htmlFor="review"><Textarea id="review" value={review} onChange={(event) => setReview(event.target.value)} /></Field>
           <CustomStatisticsFields statistics={statistics} onChange={setStatistics} />
+          {confirmMissing && (missingPlaytime || missingRating) ? (
+            <div className="space-y-3 rounded-md border border-amber-400/60 bg-amber-400/10 p-3" role="alert">
+              <p className="text-sm font-medium text-amber-100">Nie podano czasu gry lub oceny. Czy zapisać wpis mimo to?</p>
+              <div className="flex flex-wrap gap-2">
+                <Button type="submit" variant="secondary" data-allow-missing="true">Zapisz mimo to</Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => {
+                    setConfirmMissing(false);
+                    (missingPlaytime ? playtimeInputRef.current : ratingInputRef.current)?.focus();
+                  }}
+                >
+                  Uzupełnij dane
+                </Button>
+              </div>
+            </div>
+          ) : null}
           {error ? <p className="rounded-md bg-destructive/15 p-3 text-sm text-destructive" role="alert">{error}</p> : null}
           <Button type="submit" disabled={saving}><Save className="h-4 w-4" aria-hidden="true" />{saving ? "Zapisywanie…" : "Zapisz ukończoną grę"}</Button>
         </CardContent>
@@ -266,6 +317,6 @@ export function CompletedGameForm({ entry }: { entry?: CompletedGameEntry }) {
   );
 }
 
-function Field({ label, htmlFor, children }: { label: string; htmlFor: string; children: React.ReactNode }) {
-  return <div className="space-y-1.5"><Label htmlFor={htmlFor}>{label}</Label>{children}</div>;
+function Field({ label, htmlFor, warning, children }: { label: string; htmlFor: string; warning?: string; children: React.ReactNode }) {
+  return <div className="space-y-1.5"><Label htmlFor={htmlFor}>{label}</Label>{children}{warning ? <p className="text-xs text-destructive" role="alert">{warning}</p> : null}</div>;
 }

@@ -17,3 +17,23 @@ def test_reorder_backlog_updates_positions(db_session):
     assert [entry.id for entry in reordered] == [entry_b.id, entry_a.id]
     assert entry_b.position == 0
     assert entry_a.position == 1
+
+
+def test_backlog_sort_direction_supports_added_date_and_title(client, db_session):
+    beta = Game(title="Beta", genres=[], platforms=[], external_source="manual")
+    alpha = Game(title="Alpha", genres=[], platforms=[], external_source="manual")
+    db_session.add_all([beta, alpha])
+    db_session.flush()
+    db_session.add_all([
+        BacklogEntry(game_id=beta.id, position=0),
+        BacklogEntry(game_id=alpha.id, position=1),
+    ])
+    db_session.commit()
+
+    title_ascending = client.get("/api/backlog", params={"sort": "title", "direction": "asc"})
+    title_descending = client.get("/api/backlog", params={"sort": "title", "direction": "desc"})
+    added_ascending = client.get("/api/backlog", params={"sort": "added", "direction": "asc"})
+
+    assert [item["game"]["title"] for item in title_ascending.json()] == ["Alpha", "Beta"]
+    assert [item["game"]["title"] for item in title_descending.json()] == ["Beta", "Alpha"]
+    assert [item["game"]["title"] for item in added_ascending.json()] == ["Beta", "Alpha"]

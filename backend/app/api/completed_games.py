@@ -63,10 +63,13 @@ def list_completed_games(
     genre: list[str] | None = Query(default=None),
     rating_min: float | None = Query(default=None, ge=0, le=10),
     rating_max: float | None = Query(default=None, ge=0, le=10),
+    date_from: date | None = Query(default=None),
+    date_to: date | None = Query(default=None),
+    playtime_min: float | None = Query(default=None, ge=0),
+    playtime_max: float | None = Query(default=None, ge=0),
     db: Session = Depends(get_session),
 ) -> list[CompletedGameEntry]:
-    if rating_min is not None and rating_max is not None and rating_min > rating_max:
-        raise HTTPException(status_code=422, detail="rating_min cannot be greater than rating_max")
+    _validate_filter_ranges(rating_min, rating_max, date_from, date_to, playtime_min, playtime_max)
     start, end = _date_range(year, month)
     entries = db.scalars(
         _entry_query()
@@ -79,6 +82,10 @@ def list_completed_games(
         genres=genre or [],
         rating_min=rating_min,
         rating_max=rating_max,
+        date_from=date_from,
+        date_to=date_to,
+        playtime_min=playtime_min,
+        playtime_max=playtime_max,
     )
 
 
@@ -90,12 +97,15 @@ def get_completed_games_year_dashboard(
     genre: list[str] | None = Query(default=None),
     rating_min: float | None = Query(default=None, ge=0, le=10),
     rating_max: float | None = Query(default=None, ge=0, le=10),
+    date_from: date | None = Query(default=None),
+    date_to: date | None = Query(default=None),
+    playtime_min: float | None = Query(default=None, ge=0),
+    playtime_max: float | None = Query(default=None, ge=0),
     db: Session = Depends(get_session),
 ) -> CompletedGamesYearDashboardRead:
     if year < 1900 or year > 9998:
         raise HTTPException(status_code=422, detail="Invalid year")
-    if rating_min is not None and rating_max is not None and rating_min > rating_max:
-        raise HTTPException(status_code=422, detail="rating_min cannot be greater than rating_max")
+    _validate_filter_ranges(rating_min, rating_max, date_from, date_to, playtime_min, playtime_max)
     year_entries = get_completed_entries_for_year(db, year)
     period_entries = [entry for entry in year_entries if month is None or entry.completion_date.month == month]
     filtered_entries = filter_completed_entries(
@@ -104,6 +114,10 @@ def get_completed_games_year_dashboard(
         genres=genre or [],
         rating_min=rating_min,
         rating_max=rating_max,
+        date_from=date_from,
+        date_to=date_to,
+        playtime_min=playtime_min,
+        playtime_max=playtime_max,
     )
     return build_year_dashboard(year, filtered_entries, filter_option_entries=year_entries)
 
@@ -314,3 +328,19 @@ def _date_range(year: int, month: int | None) -> tuple[date, date]:
     if month == 12:
         return start, date(year + 1, 1, 1)
     return start, date(year, month + 1, 1)
+
+
+def _validate_filter_ranges(
+    rating_min: float | None,
+    rating_max: float | None,
+    date_from: date | None,
+    date_to: date | None,
+    playtime_min: float | None,
+    playtime_max: float | None,
+) -> None:
+    if rating_min is not None and rating_max is not None and rating_min > rating_max:
+        raise HTTPException(status_code=422, detail="rating_min cannot be greater than rating_max")
+    if date_from is not None and date_to is not None and date_from > date_to:
+        raise HTTPException(status_code=422, detail="date_from cannot be greater than date_to")
+    if playtime_min is not None and playtime_max is not None and playtime_min > playtime_max:
+        raise HTTPException(status_code=422, detail="playtime_min cannot be greater than playtime_max")

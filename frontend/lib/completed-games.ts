@@ -27,6 +27,10 @@ export type CompletedYearFilters = {
   genres: string[];
   ratingMin?: number;
   ratingMax?: number;
+  dateFrom?: string;
+  dateTo?: string;
+  playtimeMin?: number;
+  playtimeMax?: number;
 };
 
 export function groupCompletedGamesByMonth(entries: CompletedGameEntry[]): CompletedGamesMonthGroup[] {
@@ -63,6 +67,14 @@ export function currentCompletedGamesYear(now = new Date()) {
   return now.getFullYear();
 }
 
+export function ratingAfterWheel(current: string, deltaY: number) {
+  if (deltaY === 0) return current;
+  const parsed = Number(current.replace(",", "."));
+  const base = current === "" || !Number.isFinite(parsed) ? (deltaY < 0 ? 0 : 0.5) : parsed;
+  const next = Math.min(10, Math.max(0, Math.round((base + (deltaY < 0 ? 0.5 : -0.5)) * 2) / 2));
+  return String(next);
+}
+
 export function completedYearFiltersFromSearchParams(params: Pick<URLSearchParams, "get" | "getAll">): CompletedYearFilters {
   const month = parseMonth(params.get("month"));
   const ratingMin = parseRating(params.get("rating_min"));
@@ -72,7 +84,11 @@ export function completedYearFiltersFromSearchParams(params: Pick<URLSearchParam
     platforms: uniqueValues(params.getAll("platform")),
     genres: uniqueValues(params.getAll("genre")),
     ratingMin,
-    ratingMax
+    ratingMax,
+    dateFrom: parseDate(params.get("date_from")),
+    dateTo: parseDate(params.get("date_to")),
+    playtimeMin: parseNonNegativeNumber(params.get("playtime_min")),
+    playtimeMax: parseNonNegativeNumber(params.get("playtime_max"))
   };
 }
 
@@ -83,11 +99,38 @@ export function completedYearFiltersToSearchParams(filters: CompletedYearFilters
   uniqueValues(filters.genres).forEach((genre) => params.append("genre", genre));
   if (filters.ratingMin !== undefined) params.set("rating_min", String(filters.ratingMin));
   if (filters.ratingMax !== undefined) params.set("rating_max", String(filters.ratingMax));
+  if (filters.dateFrom) params.set("date_from", filters.dateFrom);
+  if (filters.dateTo) params.set("date_to", filters.dateTo);
+  if (filters.playtimeMin !== undefined) params.set("playtime_min", String(filters.playtimeMin));
+  if (filters.playtimeMax !== undefined) params.set("playtime_max", String(filters.playtimeMax));
   return params;
 }
 
 export function hasCompletedYearFilters(filters: CompletedYearFilters) {
-  return Boolean(filters.month !== undefined || filters.platforms.length || filters.genres.length || filters.ratingMin !== undefined || filters.ratingMax !== undefined);
+  return Boolean(
+    filters.month !== undefined
+      || filters.platforms.length
+      || filters.genres.length
+      || filters.ratingMin !== undefined
+      || filters.ratingMax !== undefined
+      || filters.dateFrom
+      || filters.dateTo
+      || filters.playtimeMin !== undefined
+      || filters.playtimeMax !== undefined
+  );
+}
+
+export function getCompletedYearFiltersError(filters: CompletedYearFilters) {
+  if (filters.dateFrom && filters.dateTo && filters.dateFrom > filters.dateTo) {
+    return "Data początkowa nie może być późniejsza niż data końcowa.";
+  }
+  if (filters.ratingMin !== undefined && filters.ratingMax !== undefined && filters.ratingMin > filters.ratingMax) {
+    return "Minimalna ocena nie może być większa niż maksymalna.";
+  }
+  if (filters.playtimeMin !== undefined && filters.playtimeMax !== undefined && filters.playtimeMin > filters.playtimeMax) {
+    return "Minimalny czas gry nie może być większy niż maksymalny.";
+  }
+  return null;
 }
 
 function uniqueValues(values: string[]) {
@@ -98,6 +141,17 @@ function parseRating(value: string | null) {
   if (value === null || value.trim() === "") return undefined;
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed >= 0 && parsed <= 10 ? parsed : undefined;
+}
+
+function parseNonNegativeNumber(value: string | null) {
+  if (value === null || value.trim() === "") return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined;
+}
+
+function parseDate(value: string | null) {
+  if (value === null || value.trim() === "") return undefined;
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00`)) ? value : undefined;
 }
 
 export function getYearNavigation(currentYear: number, years: CompletedGamesYear[]) {

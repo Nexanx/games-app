@@ -73,6 +73,10 @@ export interface CompletedGamesFilters {
   genre?: string[];
   rating_min?: number;
   rating_max?: number;
+  date_from?: string;
+  date_to?: string;
+  playtime_min?: number;
+  playtime_max?: number;
 }
 
 export interface CompletedGameHighlight {

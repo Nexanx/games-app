@@ -1,5 +1,7 @@
+from typing import Literal
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
-from sqlalchemy import desc, func, select
+from sqlalchemy import asc, desc, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
@@ -28,14 +30,21 @@ router = APIRouter()
 @router.get("", response_model=list[BacklogEntryRead])
 def list_backlog(
     search: str | None = None,
-    sort: str = Query("position", pattern="^(position|added)$"),
+    sort: Literal["position", "added", "title"] = Query("position"),
+    direction: Literal["asc", "desc"] = Query("desc"),
     db: Session = Depends(get_session),
 ) -> list[BacklogEntry]:
     stmt = select(BacklogEntry).options(selectinload(BacklogEntry.game))
+    if search or sort == "title":
+        stmt = stmt.join(BacklogEntry.game)
     if search:
-        stmt = stmt.join(BacklogEntry.game).where(Game.title.ilike(f"%{search}%"))
+        stmt = stmt.where(Game.title.ilike(f"%{search}%"))
     if sort == "added":
-        stmt = stmt.order_by(desc(BacklogEntry.created_at))
+        order = asc if direction == "asc" else desc
+        stmt = stmt.order_by(order(BacklogEntry.created_at), order(BacklogEntry.id))
+    elif sort == "title":
+        order = asc if direction == "asc" else desc
+        stmt = stmt.order_by(order(func.lower(Game.title)), order(BacklogEntry.id))
     else:
         stmt = stmt.order_by(BacklogEntry.position, BacklogEntry.created_at)
     return db.scalars(stmt).all()

@@ -241,6 +241,39 @@ def test_completed_games_filters_can_be_combined_and_comparison_keeps_empty_mont
     assert years[0]["monthly"][4]["completed_games_count"] == 1
 
 
+def test_completed_games_date_and_playtime_filters_combine_and_validate_ranges(client, db_session):
+    short = add_game(db_session, "Short")
+    matching = add_game(db_session, "Matching")
+    late = add_game(db_session, "Late")
+    db_session.add_all(
+        [
+            CompletedGameEntry(game_id=short.id, completion_date=date(2026, 5, 10), playtime_hours=4, rating=9, platform="PC"),
+            CompletedGameEntry(game_id=matching.id, completion_date=date(2026, 5, 20), playtime_hours=12, rating=9, platform="PC"),
+            CompletedGameEntry(game_id=late.id, completion_date=date(2026, 6, 5), playtime_hours=20, rating=9, platform="PC"),
+        ]
+    )
+    db_session.commit()
+
+    response = client.get(
+        "/api/completed-games",
+        params={
+            "year": 2026,
+            "platform": "PC",
+            "rating_min": 8,
+            "date_from": "2026-05-15",
+            "date_to": "2026-05-31",
+            "playtime_min": 10,
+            "playtime_max": 15,
+        },
+    )
+
+    assert response.status_code == 200
+    assert [item["game"]["title"] for item in response.json()] == ["Matching"]
+    assert client.get("/api/completed-games", params={"year": 2026, "date_from": "2026-06-01", "date_to": "2026-05-01"}).status_code == 422
+    assert client.get("/api/completed-games", params={"year": 2026, "playtime_min": 20, "playtime_max": 10}).status_code == 422
+    assert client.get("/api/completed-games", params={"year": 2026, "playtime_min": -1}).status_code == 422
+
+
 def test_empty_year_dashboard_uses_clear_empty_values(client):
     response = client.get("/api/completed-games/year/2026/dashboard")
 

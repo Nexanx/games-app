@@ -38,6 +38,10 @@ def filter_completed_entries(
     genres: Iterable[str] = (),
     rating_min: float | None = None,
     rating_max: float | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    playtime_min: float | None = None,
+    playtime_max: float | None = None,
 ) -> list[CompletedGameEntry]:
     wanted_platforms = {_normalize(value) for value in platforms if _normalize(value)}
     wanted_genres = {_normalize(value) for value in genres if _normalize(value)}
@@ -56,6 +60,14 @@ def filter_completed_entries(
         if rating_min is not None and (entry.rating is None or entry.rating < rating_min):
             continue
         if rating_max is not None and (entry.rating is None or entry.rating > rating_max):
+            continue
+        if date_from is not None and entry.completion_date < date_from:
+            continue
+        if date_to is not None and entry.completion_date > date_to:
+            continue
+        if playtime_min is not None and entry.playtime_hours < playtime_min:
+            continue
+        if playtime_max is not None and entry.playtime_hours > playtime_max:
             continue
         filtered.append(entry)
     return filtered

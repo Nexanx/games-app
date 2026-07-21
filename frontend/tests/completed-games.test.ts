@@ -5,9 +5,11 @@ import {
   completedYearFiltersToSearchParams,
   currentCompletedGamesYear,
   getAvailableYearNavigation,
+  getCompletedYearFiltersError,
   getYearNavigation,
   groupCompletedGamesByMonth,
   hasCompletedYearFilters,
+  ratingAfterWheel,
   todayAsInputValue
 } from "../lib/completed-games";
 import type { CompletedGameEntry } from "../types";
@@ -72,14 +74,39 @@ describe("completed games grouping", () => {
 
   it("keeps combined filters in the URL and can clear their state", () => {
     const filters = completedYearFiltersFromSearchParams(
-      new URLSearchParams("month=7&platform=PC&platform=PS5&genre=RPG&rating_min=8&rating_max=9")
+      new URLSearchParams("month=7&platform=PC&platform=PS5&genre=RPG&rating_min=8&rating_max=9&date_from=2026-07-01&date_to=2026-07-31&playtime_min=5&playtime_max=80")
     );
 
-    expect(filters).toEqual({ month: 7, platforms: ["PC", "PS5"], genres: ["RPG"], ratingMin: 8, ratingMax: 9 });
+    expect(filters).toEqual({
+      month: 7,
+      platforms: ["PC", "PS5"],
+      genres: ["RPG"],
+      ratingMin: 8,
+      ratingMax: 9,
+      dateFrom: "2026-07-01",
+      dateTo: "2026-07-31",
+      playtimeMin: 5,
+      playtimeMax: 80
+    });
     expect(hasCompletedYearFilters(filters)).toBe(true);
     expect(completedYearFiltersToSearchParams(filters).toString()).toBe(
-      "month=7&platform=PC&platform=PS5&genre=RPG&rating_min=8&rating_max=9"
+      "month=7&platform=PC&platform=PS5&genre=RPG&rating_min=8&rating_max=9&date_from=2026-07-01&date_to=2026-07-31&playtime_min=5&playtime_max=80"
     );
     expect(hasCompletedYearFilters({ platforms: [], genres: [] })).toBe(false);
+  });
+
+  it("changes ratings by half a point with the wheel and keeps the scale bounds", () => {
+    expect(ratingAfterWheel("8", -100)).toBe("8.5");
+    expect(ratingAfterWheel("8", 100)).toBe("7.5");
+    expect(ratingAfterWheel("", -100)).toBe("0.5");
+    expect(ratingAfterWheel("10", -100)).toBe("10");
+    expect(ratingAfterWheel("0", 100)).toBe("0");
+  });
+
+  it("validates date, rating and playtime ranges", () => {
+    expect(getCompletedYearFiltersError({ platforms: [], genres: [], dateFrom: "2026-08-01", dateTo: "2026-07-01" })).toContain("Data początkowa");
+    expect(getCompletedYearFiltersError({ platforms: [], genres: [], ratingMin: 9, ratingMax: 8 })).toContain("Minimalna ocena");
+    expect(getCompletedYearFiltersError({ platforms: [], genres: [], playtimeMin: 20, playtimeMax: 10 })).toContain("Minimalny czas");
+    expect(getCompletedYearFiltersError({ platforms: [], genres: [], playtimeMin: 10, playtimeMax: 20 })).toBeNull();
   });
 });
