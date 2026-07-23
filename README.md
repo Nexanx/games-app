@@ -194,6 +194,10 @@ powershell -ExecutionPolicy Bypass -File .\scripts\start_app.ps1
 
 Skrypt sprawdza Python/Node/Docker, przygotowuje brakujące pliki środowiskowe, instaluje zależności, uruchamia PostgreSQL, wykonuje migracje i neutralny seed, a następnie uruchamia backend oraz frontend w jednym terminalu.
 
+Backend, frontend oraz ich procesy potomne są przypisane do jednej grupy nadzorowanej przez `scripts/dev_supervisor.py`. `Ctrl+C` najpierw wysyła łagodny sygnał zakończenia i czeka 5 sekund, a potem wymusza zamknięcie wyłącznie procesów utworzonych przez ten skrypt. Na Windows grupa korzysta z Job Object, więc zamknięcie terminala również nie pozostawia procesów `uvicorn --reload` ani `next dev`. Skrypt sprawdza zwolnienie portów 8000 i 3000 oraz zwraca kod procesu, który zakończył się błędem.
+
+Jeżeli PostgreSQL nie działał wcześniej, skrypt zatrzyma uruchomiony przez siebie kontener podczas wyjścia lub błędu startu. Baza działająca jeszcze przed uruchomieniem skryptu pozostaje bez zmian. Dane w wolumenie nie są usuwane.
+
 Kolejne uruchomienie bez instalacji:
 
 ```powershell
@@ -205,6 +209,10 @@ Zatrzymanie starych procesów tej aplikacji na portach 3000/8000 podczas startu:
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\start_app.ps1 -SkipInstall -StopExisting
 ```
+
+Parametr `-StopExisting` sprawdza ścieżkę i linię poleceń procesu oraz jego rodziców. Jeżeli port zajmuje proces spoza bieżącego katalogu projektu, skrypt zgłosi błąd i nie będzie zabijał wszystkich procesów Node lub Python po samej nazwie.
+
+W trybie `next dev` Next.js dodaje własny element `nextjs-portal` z panelem developerskim (`Route`, `Bundler`, `Turbopack`, `Preferences`) i nakładką błędów. Panel nie pochodzi z komponentów Games Tracker, jest izolowany w Shadow DOM i nie jest dołączany przez produkcyjne `next build` / `next start`.
 
 ### Uruchomienie ręczne
 
@@ -271,6 +279,8 @@ Copy-Item .env.production.example .env.production
 docker run --rm caddy:2-alpine caddy hash-password --plaintext "ustaw-silne-haslo"
 docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build
 ```
+
+Produkcyjny Compose działa celowo w trybie odłączonym (`-d`), dlatego `Ctrl+C` nie zatrzymuje kontenerów. Do kontrolowanego zakończenia tego wariantu służy `docker compose --env-file .env.production -f docker-compose.prod.yml down` albo `make prod-down`.
 
 W `.env.production` ustaw co najmniej silne `POSTGRES_PASSWORD`, `APP_DOMAIN`, `PUBLIC_APP_URL`, `APP_BASIC_AUTH_USERNAME` i wynik powyższego polecenia jako `APP_BASIC_AUTH_PASSWORD_HASH`. Hash bcrypt zawiera znaki `$`, dlatego najbezpieczniej zapisać całą wartość w pojedynczym cudzysłowie, np. `APP_BASIC_AUTH_PASSWORD_HASH='$2a$...'`.
 

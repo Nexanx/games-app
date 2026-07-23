@@ -64,18 +64,6 @@ function Invoke-ExternalCommand {
     }
 }
 
-function Stop-ProcessTree {
-    param(
-        [System.Diagnostics.Process]$Process
-    )
-
-    if (($null -eq $Process) -or $Process.HasExited) {
-        return
-    }
-
-    & taskkill.exe /PID $Process.Id /T /F 2>$null | Out-Null
-}
-
 function Get-ListeningProcessIds {
     param(
         [Parameter(Mandatory = $true)]
@@ -89,6 +77,92 @@ function Get-ListeningProcessIds {
         Select-String -Pattern $Pattern |
         ForEach-Object { [int]$_.Matches[0].Groups[1].Value } |
         Sort-Object -Unique
+}
+
+function Test-ComposeServiceRunning {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Service
+    )
+
+    Push-Location $ProjectRoot
+    try {
+        $RunningServices = @(& $DockerCommand compose ps --status running --services)
+        if ($LASTEXITCODE -ne 0) {
+            throw "Nie udalo sie sprawdzic stanu uslugi Docker Compose '$Service'."
+        }
+        return $RunningServices -contains $Service
+    }
+    finally {
+        Pop-Location
+    }
+}
+
+function Test-IsProjectProcess {
+    param(
+        [Parameter(Mandatory = $true)]
+        [int]$ProcessId
+    )
+
+    $Visited = @{}
+    $CurrentId = $ProcessId
+
+    while (($CurrentId -gt 0) -and (-not $Visited.ContainsKey($CurrentId))) {
+        $Visited[$CurrentId] = $true
+        $Details = Get-CimInstance -ClassName Win32_Process -Filter "ProcessId = $CurrentId" -ErrorAction SilentlyContinue
+        if ($null -eq $Details) {
+            return $false
+        }
+
+        $Identity = "$($Details.ExecutablePath) $($Details.CommandLine)"
+        if (($Identity.IndexOf($ProjectRoot, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) -or
+            ($Identity.IndexOf($VirtualEnvPython, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) -or
+            ($Identity.IndexOf($NextCli, [System.StringComparison]::OrdinalIgnoreCase) -ge 0)) {
+            return $true
+        }
+
+        $CurrentId = [int]$Details.ParentProcessId
+    }
+
+    return $false
+}
+
+function Stop-ProjectProcessesOnPort {
+    param(
+        [Parameter(Mandatory = $true)]
+        [int]$Port
+    )
+
+    $ProcessIds = @(Get-ListeningProcessIds -Port $Port | Where-Object { $_ -ne $PID })
+    foreach ($ProcessId in $ProcessIds) {
+        if (-not (Test-IsProjectProcess -ProcessId $ProcessId)) {
+            throw "Port $Port jest zajety przez proces PID $ProcessId, ktory nie nalezy do tego projektu. Skrypt go nie zatrzyma."
+        }
+
+        Write-Host "Lagodne zatrzymywanie poprzedniego procesu projektu na porcie $Port (PID $ProcessId)..." -ForegroundColor Yellow
+        & taskkill.exe /PID $ProcessId /T 2>$null | Out-Null
+    }
+
+    $Deadline = [DateTime]::UtcNow.AddSeconds(3)
+    do {
+        Start-Sleep -Milliseconds 100
+        $RemainingIds = @(Get-ListeningProcessIds -Port $Port | Where-Object { $_ -ne $PID })
+    } while (($RemainingIds.Count -gt 0) -and ([DateTime]::UtcNow -lt $Deadline))
+
+    foreach ($ProcessId in $RemainingIds) {
+        if (-not (Test-IsProjectProcess -ProcessId $ProcessId)) {
+            throw "Port $Port nadal jest zajety przez obcy proces PID $ProcessId. Skrypt go nie zatrzyma."
+        }
+
+        Write-Host "Proces PID $ProcessId nie odpowiedzial. Wymuszanie zatrzymania jego drzewa..." -ForegroundColor Yellow
+        & taskkill.exe /PID $ProcessId /T /F 2>$null | Out-Null
+    }
+
+    Start-Sleep -Milliseconds 250
+    $StillListening = @(Get-ListeningProcessIds -Port $Port | Where-Object { $_ -ne $PID })
+    if ($StillListening.Count -gt 0) {
+        throw "Nie udalo sie zwolnic portu $Port. Nadal nasluchuje PID: $($StillListening -join ', ')."
+    }
 }
 
 function Ensure-PortAvailable {
@@ -111,42 +185,7 @@ function Ensure-PortAvailable {
         throw "$Name nie moze wystartowac, bo port $Port jest juz zajety przez PID: $PidList. Zamknij poprzednie uruchomienie albo odpal skrypt z parametrem -StopExisting."
     }
 
-    foreach ($ProcessId in $ProcessIds) {
-        $ExistingProcess = Get-Process -Id $ProcessId -ErrorAction SilentlyContinue
-        if ($null -ne $ExistingProcess) {
-            Write-Host "Zatrzymywanie procesu na porcie $Port (PID $ProcessId)..." -ForegroundColor Yellow
-            Stop-ProcessTree -Process $ExistingProcess
-        }
-    }
-}
-
-function Start-ChildProcess {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$FilePath,
-
-        [Parameter(Mandatory = $true)]
-        [string]$Arguments,
-
-        [Parameter(Mandatory = $true)]
-        [string]$WorkingDirectory
-    )
-
-    $StartInfo = New-Object System.Diagnostics.ProcessStartInfo
-    $StartInfo.FileName = $FilePath
-    $StartInfo.Arguments = $Arguments
-    $StartInfo.WorkingDirectory = $WorkingDirectory
-    $StartInfo.UseShellExecute = $false
-    $StartInfo.CreateNoWindow = $true
-
-    $Process = New-Object System.Diagnostics.Process
-    $Process.StartInfo = $StartInfo
-
-    if (-not $Process.Start()) {
-        throw "Nie udalo sie uruchomic procesu: $FilePath $Arguments"
-    }
-
-    return $Process
+    Stop-ProjectProcessesOnPort -Port $Port
 }
 
 Write-Host "Games Tracker - uruchamianie" -ForegroundColor Green
@@ -265,78 +304,98 @@ elseif (-not (Test-Path -LiteralPath (Join-Path $FrontendDirectory "node_modules
     throw "Brak frontend/node_modules. Uruchom skrypt bez parametru -SkipInstall."
 }
 
-Invoke-ExternalCommand -Label "Uruchamianie PostgreSQL" `
-    -FilePath $DockerCommand `
-    -Arguments @("compose", "up", "-d", "--wait", "--wait-timeout", "90", "postgres") `
-    -WorkingDirectory $ProjectRoot
-
-Write-Host "PostgreSQL jest gotowy." -ForegroundColor Green
-
-Invoke-ExternalCommand -Label "Wykonywanie migracji bazy" `
-    -FilePath $VirtualEnvPython `
-    -Arguments @("-m", "alembic", "upgrade", "head") `
-    -WorkingDirectory $BackendDirectory
-
-    Invoke-ExternalCommand -Label "Dodawanie ustawien startowych" `
-    -FilePath $VirtualEnvPython `
-    -Arguments @("-m", "app.database.seed") `
-    -WorkingDirectory $BackendDirectory
-
-$BackendProcess = $null
-$FrontendProcess = $null
 $NextCli = Join-Path $FrontendDirectory "node_modules\next\dist\bin\next"
+$SupervisorScript = Join-Path $PSScriptRoot "dev_supervisor.py"
 
 if (-not (Test-Path -LiteralPath $NextCli)) {
     throw "Nie znaleziono Next.js w frontend/node_modules. Uruchom skrypt bez parametru -SkipInstall."
 }
-
-Ensure-PortAvailable -Port $BackendPort -Name "Backend"
-Ensure-PortAvailable -Port $FrontendPort -Name "Frontend"
-
-$NextCache = Join-Path $FrontendDirectory ".next"
-if (Test-Path -LiteralPath $NextCache) {
-    Write-Host ""
-    Write-Host "==> Czyszczenie cache Next.js" -ForegroundColor Cyan
-    Remove-Item -LiteralPath $NextCache -Recurse -Force
+if (-not (Test-Path -LiteralPath $SupervisorScript)) {
+    throw "Nie znaleziono nadzorcy procesow: $SupervisorScript"
 }
+
+$PostgresWasRunning = Test-ComposeServiceRunning -Service "postgres"
+$PostgresStartedByScript = -not $PostgresWasRunning
+$ApplicationExitCode = 1
 
 try {
-    Write-Host ""
-    Write-Host "==> Uruchamianie backendu i frontendu" -ForegroundColor Cyan
+    Invoke-ExternalCommand -Label "Uruchamianie PostgreSQL" `
+        -FilePath $DockerCommand `
+        -Arguments @("compose", "up", "-d", "--wait", "--wait-timeout", "90", "postgres") `
+        -WorkingDirectory $ProjectRoot
 
-    $BackendProcess = Start-ChildProcess `
+    Write-Host "PostgreSQL jest gotowy." -ForegroundColor Green
+
+    Invoke-ExternalCommand -Label "Wykonywanie migracji bazy" `
         -FilePath $VirtualEnvPython `
-        -Arguments "-m uvicorn app.main:app --reload --host 0.0.0.0 --port $BackendPort" `
+        -Arguments @("-m", "alembic", "upgrade", "head") `
         -WorkingDirectory $BackendDirectory
 
-    $FrontendProcess = Start-ChildProcess `
-        -FilePath $NodeCommand `
-        -Arguments "`"$NextCli`" dev -H 0.0.0.0 -p $FrontendPort" `
-        -WorkingDirectory $FrontendDirectory
+    Invoke-ExternalCommand -Label "Dodawanie ustawien startowych" `
+        -FilePath $VirtualEnvPython `
+        -Arguments @("-m", "app.database.seed") `
+        -WorkingDirectory $BackendDirectory
 
-    Write-Host ""
-    Write-Host "Aplikacja zostala uruchomiona:" -ForegroundColor Green
-    Write-Host "  Frontend: http://localhost:$FrontendPort"
-    Write-Host "  Backend:  http://localhost:$BackendPort"
-    Write-Host "  OpenAPI:  http://localhost:$BackendPort/docs"
-    Write-Host ""
-    Write-Host "Nacisnij Ctrl+C, aby zatrzymac backend i frontend." -ForegroundColor Yellow
+    Ensure-PortAvailable -Port $BackendPort -Name "Backend"
+    Ensure-PortAvailable -Port $FrontendPort -Name "Frontend"
 
-    while ($true) {
-        Start-Sleep -Seconds 1
-
-        if ($BackendProcess.HasExited) {
-            throw "Backend zakonczyl dzialanie (kod $($BackendProcess.ExitCode))."
-        }
-
-        if ($FrontendProcess.HasExited) {
-            throw "Frontend zakonczyl dzialanie (kod $($FrontendProcess.ExitCode))."
-        }
+    $NextCache = Join-Path $FrontendDirectory ".next"
+    if (Test-Path -LiteralPath $NextCache) {
+        Write-Host ""
+        Write-Host "==> Czyszczenie cache Next.js" -ForegroundColor Cyan
+        Remove-Item -LiteralPath $NextCache -Recurse -Force
     }
+
+    Write-Host ""
+    Write-Host "==> Uruchamianie backendu i frontendu pod nadzorem" -ForegroundColor Cyan
+
+    $SupervisorArguments = @(
+        $SupervisorScript,
+        "--backend-python", $VirtualEnvPython,
+        "--node", $NodeCommand,
+        "--next-cli", $NextCli,
+        "--backend-directory", $BackendDirectory,
+        "--frontend-directory", $FrontendDirectory,
+        "--backend-port", "$BackendPort",
+        "--frontend-port", "$FrontendPort"
+    )
+    & $VirtualEnvPython @SupervisorArguments
+    $ApplicationExitCode = $LASTEXITCODE
+}
+catch {
+    Write-Host ""
+    Write-Host "Uruchamianie aplikacji nie powiodlo sie: $($_.Exception.Message)" -ForegroundColor Red
+    $ApplicationExitCode = 1
 }
 finally {
-    Write-Host ""
-    Write-Host "Zatrzymywanie aplikacji..." -ForegroundColor Yellow
-    Stop-ProcessTree -Process $FrontendProcess
-    Stop-ProcessTree -Process $BackendProcess
+    if ($PostgresStartedByScript) {
+        Write-Host ""
+        Write-Host "Zatrzymywanie PostgreSQL uruchomionego przez ten skrypt..." -ForegroundColor Yellow
+        Push-Location $ProjectRoot
+        try {
+            & $DockerCommand compose stop --timeout 10 postgres
+            if ($LASTEXITCODE -ne 0) {
+                Write-Host "Nie udalo sie zatrzymac PostgreSQL (kod $LASTEXITCODE)." -ForegroundColor Red
+                $ApplicationExitCode = 1
+            }
+        }
+        finally {
+            Pop-Location
+        }
+    }
+    elseif ($PostgresWasRunning) {
+        Write-Host "PostgreSQL dzialal przed startem skryptu, dlatego pozostawiono go bez zmian." -ForegroundColor DarkGray
+    }
 }
+
+if ($ApplicationExitCode -eq 0) {
+    Write-Host "Games Tracker zakonczyl dzialanie poprawnie." -ForegroundColor Green
+}
+elseif ($ApplicationExitCode -eq 130) {
+    Write-Host "Games Tracker zostal zatrzymany przez uzytkownika (Ctrl+C)." -ForegroundColor Yellow
+}
+else {
+    Write-Host "Games Tracker zakonczyl dzialanie z kodem $ApplicationExitCode." -ForegroundColor Red
+}
+
+exit $ApplicationExitCode
