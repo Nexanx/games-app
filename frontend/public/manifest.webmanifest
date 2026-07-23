@@ -1,6 +1,6 @@
 {
   "name": "Games Tracker",
-  "short_name": "Games",
+  "short_name": "Games Tracker",
   "description": "Tracker historii ukończonych gier, listy Do ogrania i statystyk Path of Exile.",
   "id": "/",
   "start_url": "/",
@@ -13,10 +13,28 @@
   "categories": ["games", "productivity", "utilities"],
   "icons": [
     {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    },
+    {
       "src": "/icons/icon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "purpose": "any"
     }
   ],
   "shortcuts": [
@@ -24,25 +42,25 @@
       "name": "Ukończone gry",
       "short_name": "Ukończone",
       "url": "/completed-games",
-      "icons": [{ "src": "/icons/icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     },
     {
       "name": "Do ogrania",
       "short_name": "Do ogrania",
       "url": "/backlog",
-      "icons": [{ "src": "/icons/icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     },
     {
       "name": "Path of Exile",
       "short_name": "PoE",
       "url": "/poe",
-      "icons": [{ "src": "/icons/icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     },
     {
       "name": "Chatbot",
       "short_name": "Chat",
       "url": "/chatbot",
-      "icons": [{ "src": "/icons/icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     }
   ]
 }

@@ -3,7 +3,13 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { navItems } from "../components/layout/nav-items";
+import {
+  isNavItemActive,
+  mobileMoreGroups,
+  mobilePrimaryItems,
+  navGroups,
+  navItems
+} from "../components/layout/nav-items";
 import { APP_NAME } from "../lib/app-config";
 
 function readProjectFile(path: string) {
@@ -16,7 +22,12 @@ describe("application UI configuration", () => {
 
     expect(APP_NAME).toBe("Games Tracker");
     expect(manifest.name).toBe("Games Tracker");
-    expect(manifest.short_name).toBe("Games");
+    expect(manifest.short_name).toBe("Games Tracker");
+    expect(manifest.icons).toEqual(expect.arrayContaining([
+      expect.objectContaining({ src: "/icons/icon-192.png", sizes: "192x192" }),
+      expect.objectContaining({ src: "/icons/icon-512.png", sizes: "512x512" }),
+      expect.objectContaining({ src: "/icons/icon-maskable.svg", purpose: "maskable" })
+    ]));
   });
 
   it("does not expose the old application name or private backend text in shared chrome", () => {
@@ -32,12 +43,36 @@ describe("application UI configuration", () => {
     expect(combined).not.toContain("Dane zapisuje lokalny backend FastAPI");
   });
 
-  it("removes the settings tab from primary navigation", () => {
+  it("groups navigation and keeps mobile navigation focused on primary destinations", () => {
     const hrefs = navItems.map((item) => item.href);
     expect(hrefs).not.toContain("/settings");
     expect(navItems.map((item) => item.label)).not.toContain("Ustawienia");
-    expect(hrefs).toContain("/analytics");
-    expect(navItems).toHaveLength(6);
+    expect(navGroups.map((group) => group.label)).toEqual(["Główne", "Statystyki", "Dodatkowe"]);
+    expect(navGroups[0].items.map((item) => item.href)).toEqual(["/", "/backlog", "/completed-games", "/poe"]);
+    expect(mobilePrimaryItems.map((item) => item.href)).toEqual(["/", "/backlog", "/completed-games", "/poe"]);
+    expect(mobileMoreGroups.flatMap((group) => group.items.map((item) => item.href))).toEqual([
+      "/analytics",
+      "/releases",
+      "/chatbot",
+      "/backup"
+    ]);
+    expect(navItems).toHaveLength(8);
+  });
+
+  it("matches active navigation without marking similarly prefixed routes", () => {
+    expect(isNavItemActive("/", "/")).toBe(true);
+    expect(isNavItemActive("/backlog/12", "/backlog")).toBe(true);
+    expect(isNavItemActive("/backlog-extra", "/backlog")).toBe(false);
+    expect(isNavItemActive("/analytics/history", "/analytics")).toBe(true);
+  });
+
+  it("uses one backup manager on its dedicated route", () => {
+    const dashboard = readProjectFile("app/page.tsx");
+    const backup = readProjectFile("app/backup/page.tsx");
+
+    expect(dashboard).not.toContain("<BackupManager");
+    expect(backup).toContain("<BackupManager />");
+    expect(backup).toContain("Kopia danych");
   });
 
   it("uses one controlled form submission for RAWG search", () => {
@@ -59,12 +94,12 @@ describe("application UI configuration", () => {
     expect(historyAnalytics).toContain("<AnalyticsHistory />");
   });
 
-  it("keeps discovery outside analytics and does not overload primary navigation", () => {
+  it("keeps discovery outside analytics and out of primary mobile navigation", () => {
     const backlog = readProjectFile("app/backlog/page.tsx");
     const releases = readProjectFile("app/releases/page.tsx");
     const recommendations = readProjectFile("components/games/GameRecommendations.tsx");
 
-    expect(navItems.map((item) => item.href)).not.toContain("/releases");
+    expect(mobilePrimaryItems.map((item) => item.href)).not.toContain("/releases");
     expect(backlog).toContain('href="/releases"');
     expect(backlog).toContain("<GameRecommendations");
     expect(backlog.indexOf("<GameRecommendations")).toBeGreaterThan(backlog.indexOf("<BacklogList"));
@@ -87,6 +122,7 @@ describe("application UI configuration", () => {
     expect(nextConfig).toContain('process.env.NODE_ENV !== "development"');
     expect(nextConfig).toContain('source: "/api/:path*"');
     expect(nextConfig).toContain('destination: "http://127.0.0.1:8000/api/:path*"');
+    expect(nextConfig).toContain("devIndicators: false");
     expect(startScript).toContain('$LocalApiSetting = "NEXT_PUBLIC_API_URL=/api"');
     expect(startScript).toContain("Zmieniono lokalny adres API na /api");
   });

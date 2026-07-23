@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 
-import { BackupManager } from "@/components/backup/BackupManager";
 import { DashboardContent } from "@/components/dashboard/DashboardContent";
 import { Button } from "@/components/ui/button";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -45,9 +44,5 @@ export default function DashboardPage() {
   return <div className="space-y-8">
     {error ? <ErrorState message={error} /> : null}
     <DashboardContent summary={summary} />
-    <section aria-labelledby="backup-heading">
-      <h2 id="backup-heading" className="sr-only">Dane i bezpieczeństwo</h2>
-      <BackupManager onImported={async () => { setSummary(await api.dashboard()); setError(null); }} />
-    </section>
   </div>;
 }

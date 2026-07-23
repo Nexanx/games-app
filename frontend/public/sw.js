@@ -1,8 +1,22 @@
-const CACHE_VERSION = "games-tracker-v3";
+const CACHE_VERSION = "games-tracker-v4";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
-const APP_SHELL = ["/", "/completed-games", "/backlog", "/poe", "/chatbot", "/offline.html", "/manifest.webmanifest", "/icons/icon.svg"];
+const APP_SHELL = [
+  "/",
+  "/completed-games",
+  "/backlog",
+  "/analytics",
+  "/releases",
+  "/chatbot",
+  "/backup",
+  "/poe",
+  "/offline.html",
+  "/manifest.webmanifest",
+  "/icons/icon.svg",
+  "/icons/icon-192.png",
+  "/icons/icon-512.png"
+];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
