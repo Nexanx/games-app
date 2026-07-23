@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
-import { CalendarPlus, CloudDownload, Plus, RefreshCw, UserPlus } from "lucide-react";
+import { CalendarPlus, Plus, RefreshCw, UserPlus } from "lucide-react";
 
 import { LeagueSelector } from "@/components/poe/LeagueSelector";
 import { PoeLeagueManager } from "@/components/poe/PoeLeagueManager";
@@ -16,7 +16,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { Select } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { isAbortError } from "@/lib/poe";
 import { api } from "@/services/api";
 import type { PoeCharacter, PoeLeague } from "@/types";
@@ -26,12 +25,10 @@ export default function PoePage() {
   const [leagues, setLeagues] = useState<PoeLeague[]>([]);
   const [gameVersion, setGameVersion] = useState("");
   const [leagueId, setLeagueId] = useState("");
-  const [status, setStatus] = useState("");
   const [sort, setSort] = useState("added");
   const [search, setSearch] = useState("");
   const [appliedSearch, setAppliedSearch] = useState("");
   const [openPanel, setOpenPanel] = useState<"league" | "character" | null>(null);
-  const [syncingLeagues, setSyncingLeagues] = useState(false);
   const [leagueMessage, setLeagueMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -41,7 +38,7 @@ export default function PoePage() {
     setError(null);
     try {
       const characterData = await api.listCharacters(
-        { game_version: gameVersion, league_id: leagueId, status, sort, search: appliedSearch },
+        { game_version: gameVersion, league_id: leagueId, sort, search: appliedSearch },
         signal
       );
       setCharacters(characterData);
@@ -51,7 +48,7 @@ export default function PoePage() {
     } finally {
       if (!signal?.aborted) setLoading(false);
     }
-  }, [appliedSearch, gameVersion, leagueId, sort, status]);
+  }, [appliedSearch, gameVersion, leagueId, sort]);
 
   const refreshLeagues = useCallback(async (signal?: AbortSignal) => {
     const leagueData = await api.listLeagues(signal);
@@ -81,7 +78,6 @@ export default function PoePage() {
   }
 
   function afterLeagueAdded() {
-    setOpenPanel(null);
     void refreshLeagues().catch((err) => {
       setLeagueMessage(err instanceof Error ? err.message : "Nie udało się odświeżyć listy lig");
     });
@@ -95,20 +91,6 @@ export default function PoePage() {
       await loadCharacters();
     }
     return refreshed;
-  }
-
-  async function syncPoeLeagues() {
-    setSyncingLeagues(true);
-    setLeagueMessage(null);
-    try {
-      const result = await api.syncLeagues();
-      setLeagueMessage(`Zsynchronizowano ligi: ${result.created} nowych, ${result.updated} zaktualizowanych.`);
-      await refreshLeagues();
-    } catch (err) {
-      setLeagueMessage(err instanceof Error ? err.message : "Nie udało się zsynchronizować lig");
-    } finally {
-      setSyncingLeagues(false);
-    }
   }
 
   function applySearch() {
@@ -135,17 +117,7 @@ export default function PoePage() {
       </header>
 
       <section className="space-y-3">
-        <div className="grid gap-3 sm:grid-cols-3">
-          <Button
-            type="button"
-            variant="primary"
-            className="min-h-12 justify-start"
-            onClick={syncPoeLeagues}
-            disabled={syncingLeagues}
-          >
-            <CloudDownload className="h-4 w-4" aria-hidden="true" />
-            Synchronizuj ligi
-          </Button>
+        <div className="grid gap-3 sm:grid-cols-2">
           <Button
             type="button"
             variant={openPanel === "league" ? "primary" : "secondary"}
@@ -153,7 +125,7 @@ export default function PoePage() {
             onClick={() => setOpenPanel(openPanel === "league" ? null : "league")}
           >
             <CalendarPlus className="h-4 w-4" aria-hidden="true" />
-            Dodaj ligę ręcznie
+            Dodaj ligę
           </Button>
           <Button
             type="button"
@@ -178,7 +150,7 @@ export default function PoePage() {
       </section>
 
       <Card>
-        <CardContent className="grid gap-3 p-3 sm:p-4 lg:grid-cols-[1fr_150px_180px_150px_150px_auto]">
+        <CardContent className="grid gap-3 p-3 sm:p-4 lg:grid-cols-[1fr_150px_180px_150px_auto]">
           <Input aria-label="Szukaj postaci" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Szukaj postaci" onKeyDown={(event) => event.key === "Enter" && applySearch()} />
           <Select
             aria-label="Wersja Path of Exile"
@@ -193,14 +165,6 @@ export default function PoePage() {
             <option value="poe2">PoE 2</option>
           </Select>
           <LeagueSelector leagues={visibleLeagues} value={leagueId} onChange={setLeagueId} includeAll ariaLabel="Liga" />
-          <Select aria-label="Status postaci" value={status} onChange={(event) => setStatus(event.target.value)}>
-            <option value="">Wszystkie statusy</option>
-            <option value="active">Aktywna</option>
-            <option value="ended">Zakończona</option>
-            <option value="rip">Rip</option>
-            <option value="test">Testowa</option>
-            <option value="deleted">Usunięta</option>
-          </Select>
           <Select aria-label="Sortowanie postaci" value={sort} onChange={(event) => setSort(event.target.value)}>
             <option value="added">Data dodania</option>
             <option value="level">Level</option>
@@ -236,29 +200,21 @@ function LeagueForm({ onAdded }: { onAdded: () => void }) {
     name: string;
     game_version: "poe1" | "poe2";
     start_date: string;
-    end_date: string;
-    status: string;
-    notes: string;
-  }>({ name: "", game_version: "poe1", start_date: "", end_date: "", status: "active", notes: "" });
+  }>({ name: "", game_version: "poe1", start_date: "" });
   const [message, setMessage] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!form.name.trim()) {
-      setMessage("Podaj nazwę ligi.");
+    if (!form.name.trim() || !form.start_date) {
+      setMessage("Podaj nazwę i datę startu ligi.");
       return;
     }
     setMessage(null);
     setSaving(true);
     try {
-      await api.createLeague({
-        ...form,
-        start_date: form.start_date || null,
-        end_date: form.end_date || null,
-        notes: form.notes || null
-      });
-      setForm({ name: "", game_version: "poe1", start_date: "", end_date: "", status: "active", notes: "" });
+      await api.createLeague({ name: form.name.trim(), game_version: form.game_version, start_date: form.start_date });
+      setForm({ name: "", game_version: form.game_version, start_date: "" });
       setMessage("Liga dodana.");
       onAdded();
     } catch (err) {
@@ -272,44 +228,29 @@ function LeagueForm({ onAdded }: { onAdded: () => void }) {
     <Card>
       <CardHeader>
         <CardTitle>Dodaj ligę</CardTitle>
-        <CardDescription>Ligi są wspólne dla postaci i statystyk dropów.</CardDescription>
+        <CardDescription>Data startu ustala kolejność lig i rok, do którego analizy doliczą czas postaci. Ta sama nazwa może wystąpić osobno w PoE 1 i PoE 2.</CardDescription>
       </CardHeader>
       <CardContent>
         <form className="space-y-3" onSubmit={submit}>
-        <Field label="Nazwa ligi" htmlFor="poe-league-name">
-          <Input id="poe-league-name" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="Nazwa ligi" />
-        </Field>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Gra" htmlFor="poe-league-version">
-            <Select id="poe-league-version" value={form.game_version} onChange={(event) => setForm({ ...form, game_version: event.target.value as "poe1" | "poe2" })}>
-              <option value="poe1">Path of Exile 1</option>
-              <option value="poe2">Path of Exile 2</option>
-            </Select>
-          </Field>
-          <Field label="Status" htmlFor="poe-league-status">
-            <Select id="poe-league-status" value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value })}>
-              <option value="active">Aktywna</option>
-              <option value="completed">Zakończona</option>
-              <option value="planned">Planowana</option>
-            </Select>
-          </Field>
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Start" htmlFor="poe-league-start">
-            <Input id="poe-league-start" type="date" value={form.start_date} onChange={(event) => setForm({ ...form, start_date: event.target.value })} />
-          </Field>
-          <Field label="Koniec" htmlFor="poe-league-end">
-            <Input id="poe-league-end" type="date" value={form.end_date} onChange={(event) => setForm({ ...form, end_date: event.target.value })} />
-          </Field>
-        </div>
-        <Field label="Notatki" htmlFor="poe-league-notes">
-          <Textarea id="poe-league-notes" value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} />
-        </Field>
-        {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}
-        <Button type="submit" className="w-full sm:w-auto" disabled={saving}>
-          <Plus className="h-4 w-4" aria-hidden="true" />
-          Dodaj ligę
-        </Button>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_220px_200px]">
+            <Field label="Nazwa ligi" htmlFor="poe-league-name">
+              <Input id="poe-league-name" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="Nazwa ligi" />
+            </Field>
+            <Field label="Gra" htmlFor="poe-league-version">
+              <Select id="poe-league-version" value={form.game_version} onChange={(event) => setForm({ ...form, game_version: event.target.value as "poe1" | "poe2" })}>
+                <option value="poe1">Path of Exile 1</option>
+                <option value="poe2">Path of Exile 2</option>
+              </Select>
+            </Field>
+            <Field label="Data startu" htmlFor="poe-league-start-date">
+              <Input id="poe-league-start-date" type="date" value={form.start_date} onChange={(event) => setForm({ ...form, start_date: event.target.value })} required />
+            </Field>
+          </div>
+          {message ? <p className="text-sm text-muted-foreground" role={message === "Liga dodana." ? "status" : "alert"}>{message}</p> : null}
+          <Button type="submit" className="w-full sm:w-auto" disabled={saving || !form.name.trim() || !form.start_date}>
+            <Plus className="h-4 w-4" aria-hidden="true" />
+            {saving ? "Dodawanie…" : "Dodaj ligę"}
+          </Button>
         </form>
       </CardContent>
     </Card>

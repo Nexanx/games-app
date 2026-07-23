@@ -41,10 +41,10 @@ def seed_backup_data(db_session):
     db_session.add(completed)
     db_session.flush()
     db_session.add(CustomStatistic(completed_game_entry_id=completed.id, name="Śmierci", value="42", value_type="number"))
-    league = PoeLeague(name="Mercenaries", game_version="poe1", status="active")
+    league = PoeLeague(name="Mercenaries", game_version="poe1")
     db_session.add(league)
     db_session.flush()
-    character = PoeCharacter(name="Ranger", game_version="poe1", level=91, league_id=league.id, status="active")
+    character = PoeCharacter(name="Ranger", game_version="poe1", level=91, league_id=league.id)
     db_session.add(character)
     db_session.flush()
     db_session.add(PoeCurrencyStat(character_id=character.id, league_id=league.id, name="Chaos Orb", category="currency", value=12))
@@ -87,7 +87,7 @@ def test_export_and_replace_import_restore_relations_without_secrets(client, db_
     imported = client.post("/api/backup/import", json={"mode": "replace", "backup": payload})
 
     assert exported.status_code == 200
-    assert payload["format_version"] == 3
+    assert payload["format_version"] == 4
     assert "OPENAI_API_KEY" not in exported.text
     assert imported.status_code == 200
     assert imported.json()["restored"]["games"] == 1
@@ -162,3 +162,17 @@ def test_version_two_backup_remains_importable_without_recommendation_feedback(c
     assert response.status_code == 200
     assert response.json()["restored"]["recommendation_feedback"] == 0
     assert db_session.scalar(select(func.count(GameRecommendationFeedback.id))) == 0
+
+
+def test_version_three_backup_with_legacy_poe_statuses_remains_importable(client, db_session):
+    seed_backup_data(db_session)
+    payload = client.get("/api/backup/export").json()
+    payload["format_version"] = 3
+    payload["data"]["poe_leagues"][0]["status"] = "active"
+    payload["data"]["poe_characters"][0]["status"] = "ended"
+
+    response = client.post("/api/backup/import", json={"mode": "replace", "backup": payload})
+
+    assert response.status_code == 200
+    assert db_session.scalar(select(func.count(PoeLeague.id))) == 1
+    assert db_session.scalar(select(func.count(PoeCharacter.id))) == 1

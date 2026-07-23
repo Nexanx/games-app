@@ -73,21 +73,72 @@ const RARITY_THEMES: Record<string, RarityTheme> = {
 
 type TooltipPosition = CSSProperties & { visibility: "hidden" | "visible" };
 
+const CORE_SLOT_ORDER = [
+  "Weapon 1",
+  "Helmet",
+  "Amulet",
+  "Weapon 2",
+  "Ring 1",
+  "Body Armour",
+  "Ring 2",
+  "Gloves",
+  "Belt",
+  "Boots"
+] as const;
+
+const CORE_SLOT_PLACEMENT: Record<(typeof CORE_SLOT_ORDER)[number], string> = {
+  "Weapon 1": "md:col-start-1 md:row-start-2 md:row-span-4",
+  Helmet: "md:col-start-3 md:row-start-1",
+  Amulet: "md:col-start-4 md:row-start-2",
+  "Weapon 2": "md:col-start-5 md:row-start-2 md:row-span-4",
+  "Ring 1": "md:col-start-2 md:row-start-3",
+  "Body Armour": "md:col-start-3 md:row-start-2 md:row-span-4",
+  "Ring 2": "md:col-start-4 md:row-start-3",
+  Gloves: "md:col-start-2 md:row-start-5 md:row-span-2",
+  Belt: "md:col-start-3 md:row-start-6",
+  Boots: "md:col-start-4 md:row-start-5 md:row-span-2"
+};
+
 export function PoeEquipmentGrid({ equipment }: { equipment: PoeEquipmentItem[] }) {
+  const bySlot = new Map(equipment.map((item) => [item.slot, item]));
+  const coreItems = CORE_SLOT_ORDER.flatMap((slot) => {
+    const item = bySlot.get(slot);
+    return item ? [{ item, placement: CORE_SLOT_PLACEMENT[slot] }] : [];
+  });
+  const flaskItems = equipment.filter((item) => item.slot.startsWith("Flask "));
+  const charmItems = equipment.filter((item) => item.slot.startsWith("Charm "));
+  const knownSlots = new Set([...CORE_SLOT_ORDER, ...flaskItems.map((item) => item.slot), ...charmItems.map((item) => item.slot)]);
+  const otherItems = equipment.filter((item) => !knownSlots.has(item.slot));
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Końcowe wyposażenie</CardTitle>
+        <CardTitle>Ekwipunek</CardTitle>
         <CardDescription>
-          Najedź na przedmiot, wybierz go klawiszem Tab albo dotknij na telefonie, aby zobaczyć pełne statystyki. Snapshot nie zawiera drzewka, atlasu ani przedmiotów zapasowych.
+          Sloty są ułożone jak na ekranie postaci. Najedź, użyj klawisza Tab albo dotknij przedmiotu, aby zobaczyć pełne statystyki.
         </CardDescription>
       </CardHeader>
       <CardContent>
         {equipment.length ? (
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {equipment.map((item) => (
-              <PoeEquipmentItemCard key={item.id} item={item} />
-            ))}
+          <div className="space-y-5">
+            {coreItems.length ? (
+              <div className="overflow-x-auto rounded-xl border border-border/70 bg-[radial-gradient(circle_at_center,rgba(100,116,139,0.12),transparent_64%)] p-3 md:p-5">
+                <div className="grid grid-cols-2 gap-3 md:mx-auto md:w-fit md:grid-cols-[9rem_5.5rem_9rem_5.5rem_9rem] md:grid-rows-[repeat(6,4.5rem)] md:gap-2">
+                  {coreItems.map(({ item, placement }) => (
+                    <PoeEquipmentItemCard key={item.id} item={item} className={placement} paperDoll />
+                  ))}
+                </div>
+              </div>
+            ) : null}
+            {flaskItems.length ? (
+              <EquipmentGroup title="Flaszki" items={flaskItems} columns="grid-cols-2 sm:grid-cols-3 lg:grid-cols-5" compact />
+            ) : null}
+            {charmItems.length ? (
+              <EquipmentGroup title="Charmy" items={charmItems} columns="sm:grid-cols-3" />
+            ) : null}
+            {otherItems.length ? (
+              <EquipmentGroup title="Pozostałe sloty" items={otherItems} columns="sm:grid-cols-2 lg:grid-cols-3" />
+            ) : null}
           </div>
         ) : (
           <div className="flex min-h-32 flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border p-5 text-center text-muted-foreground">
@@ -101,7 +152,18 @@ export function PoeEquipmentGrid({ equipment }: { equipment: PoeEquipmentItem[] 
   );
 }
 
-function PoeEquipmentItemCard({ item }: { item: PoeEquipmentItem }) {
+function EquipmentGroup({ title, items, columns, compact = false }: { title: string; items: PoeEquipmentItem[]; columns: string; compact?: boolean }) {
+  return (
+    <section className="space-y-2">
+      <h3 className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">{title}</h3>
+      <div className={`grid gap-3 ${compact ? "max-w-3xl" : ""} ${columns}`}>
+        {items.map((item) => <PoeEquipmentItemCard key={item.id} item={item} compact={compact} />)}
+      </div>
+    </section>
+  );
+}
+
+function PoeEquipmentItemCard({ item, className = "", paperDoll = false, compact = false }: { item: PoeEquipmentItem; className?: string; paperDoll?: boolean; compact?: boolean }) {
   const anchorRef = useRef<HTMLButtonElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
   const tooltipId = useId();
@@ -186,7 +248,7 @@ function PoeEquipmentItemCard({ item }: { item: PoeEquipmentItem }) {
 
   return (
     <div
-      className="min-w-0"
+      className={`min-w-0 ${className}`}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       onPointerEnter={(event) => {
@@ -199,7 +261,7 @@ function PoeEquipmentItemCard({ item }: { item: PoeEquipmentItem }) {
       <button
         ref={anchorRef}
         type="button"
-        className={`flex min-h-20 w-full min-w-0 items-center gap-3 rounded-lg border bg-black/20 p-3 text-left transition hover:bg-black/35 focus-visible:ring-2 focus-visible:ring-ring ${theme.border} ${theme.cardText}`}
+        className={`flex min-h-20 w-full min-w-0 items-center gap-3 overflow-hidden rounded-lg border bg-black/20 p-3 text-left transition hover:bg-black/35 focus-visible:ring-2 focus-visible:ring-ring ${paperDoll ? "md:h-full md:min-h-0 md:flex-col md:justify-center md:gap-1.5 md:p-2 md:text-center" : ""} ${compact ? "p-2" : ""} ${theme.border} ${theme.cardText}`}
         aria-describedby={open ? tooltipId : undefined}
         aria-expanded={pinned}
         aria-label={`Pokaż statystyki przedmiotu ${item.name}`}
@@ -208,15 +270,15 @@ function PoeEquipmentItemCard({ item }: { item: PoeEquipmentItem }) {
         onFocus={() => setFocused(true)}
         onKeyDown={handleKeyDown}
       >
-        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md border border-current/35 bg-black/30">
+        <span className={`flex shrink-0 items-center justify-center rounded-md border border-current/35 bg-black/30 ${paperDoll ? "h-10 w-10 md:h-7 md:w-7" : compact ? "h-10 w-10" : "h-12 w-12"}`}>
           <EquipmentIcon slot={item.slot} />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block text-xs uppercase tracking-wide text-muted-foreground">{poeSlotLabel(item.slot)}</span>
-          <span className="block truncate font-semibold">{item.name}</span>
-          {item.base_type && item.base_type !== item.name ? <span className="block truncate text-xs text-muted-foreground">{item.base_type}</span> : null}
+          <span className={`block uppercase tracking-wide text-muted-foreground ${paperDoll ? "text-[0.65rem]" : "text-xs"}`}>{poeSlotLabel(item.slot)}</span>
+          <span className={`block truncate font-semibold ${paperDoll ? "text-sm" : ""}`}>{item.name}</span>
+          {item.base_type && item.base_type !== item.name ? <span className={`truncate text-xs text-muted-foreground ${paperDoll ? "block md:hidden" : "block"}`}>{item.base_type}</span> : null}
         </span>
-        <span className="hidden shrink-0 text-[0.65rem] uppercase tracking-wide text-muted-foreground sm:block">Najedź</span>
+        {!paperDoll ? <span className="hidden shrink-0 text-[0.65rem] uppercase tracking-wide text-muted-foreground sm:block">Najedź</span> : null}
       </button>
 
       {open && typeof document !== "undefined"
@@ -274,8 +336,8 @@ function PoeItemTextSection({ title, lines, status = false }: { title: string; l
   return (
     <section className="border-t border-[#77775b]/45 py-2 first:border-t-0 first:pt-0">
       <h4 className="mb-1 text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-[#a7aa8b]">{title}</h4>
-      {lines.map((line) => (
-        <p key={line} className={`break-words ${status && normalizeItemLine(line) === "corrupted" ? "font-semibold text-[#d96d6d]" : "text-[#d7dde5]"}`}>
+      {lines.map((line, index) => (
+        <p key={`${title}-${index}-${line}`} className={`break-words ${status && normalizeItemLine(line) === "corrupted" ? "font-semibold text-[#d96d6d]" : "text-[#d7dde5]"}`}>
           {line}
         </p>
       ))}

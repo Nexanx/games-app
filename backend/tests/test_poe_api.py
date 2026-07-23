@@ -2,10 +2,10 @@ from app.models import PoeCharacter, PoeCurrencyStat, PoeEquipmentItem
 from tests.test_poe_build import encode_pob
 
 
-def create_league(client, *, name="Test League", game_version="poe1"):
+def create_league(client, *, name="Test League", game_version="poe1", start_date="2026-01-01"):
     response = client.post(
         "/api/poe/leagues",
-        json={"name": name, "game_version": game_version, "status": "active"},
+        json={"name": name, "game_version": game_version, "start_date": start_date},
     )
     assert response.status_code == 201
     return response.json()
@@ -19,7 +19,6 @@ def create_character(client, league_id: int):
             "game_version": "poe1",
             "league_id": league_id,
             "level": 92,
-            "status": "active",
             "playtime_minutes": 600,
             "poe_ninja_url": "https://poe.ninja/builds/test/character/account/Arc-Witch",
             "profile_url": "https://www.pathofexile.com/account/view-profile/example",
@@ -34,7 +33,7 @@ def test_poe_crud_keeps_relations_and_returns_user_facing_conflicts(client, db_s
     league = create_league(client)
     duplicate_league = client.post(
         "/api/poe/leagues",
-        json={"name": "Test League", "game_version": "poe1", "status": "active"},
+        json={"name": "Test League", "game_version": "poe1", "start_date": "2026-01-01"},
     )
     assert duplicate_league.status_code == 409
 
@@ -77,6 +76,29 @@ def test_poe_crud_keeps_relations_and_returns_user_facing_conflicts(client, db_s
     assert client.get(f"/api/poe/characters/{character['id']}/stats").status_code == 404
 
 
+def test_league_identity_is_trimmed_case_insensitive_and_scoped_to_game(client):
+    missing_date = client.post(
+        "/api/poe/leagues",
+        json={"name": "No date", "game_version": "poe1"},
+    )
+    assert missing_date.status_code == 422
+
+    first = create_league(client, name="  Settlers   of Kalguur  ", game_version="poe1")
+    assert first["name"] == "Settlers of Kalguur"
+
+    duplicate = client.post(
+        "/api/poe/leagues",
+        json={"name": "settlers of kalguur", "game_version": "poe1", "start_date": "2026-01-01"},
+    )
+    assert duplicate.status_code == 409
+
+    other_game = client.post(
+        "/api/poe/leagues",
+        json={"name": "Settlers of Kalguur", "game_version": "poe2", "start_date": "2026-01-01"},
+    )
+    assert other_game.status_code == 201
+
+
 def test_poe_rejects_mismatched_leagues_and_untrusted_import_urls(client):
     league = create_league(client, game_version="poe1")
 
@@ -87,7 +109,6 @@ def test_poe_rejects_mismatched_leagues_and_untrusted_import_urls(client):
             "game_version": "poe2",
             "league_id": league["id"],
             "level": 1,
-            "status": "active",
             "playtime_minutes": 0,
         },
     )
@@ -110,7 +131,6 @@ def test_poe_rejects_mismatched_leagues_and_untrusted_import_urls(client):
             "name": "Unsafe Link",
             "game_version": "poe1",
             "level": 1,
-            "status": "active",
             "playtime_minutes": 0,
             "profile_url": "javascript:alert(1)",
         },
@@ -145,7 +165,6 @@ def test_pob_import_creates_final_character_and_equipment_snapshot(client, db_se
     assert imported.status_code == 201
     character = imported.json()
     assert character["name"] == "Final Witch"
-    assert character["status"] == "ended"
     assert character["snapshot_source"] == "poe_ninja_pob"
     assert character["level"] == 96
     assert character["ascendancy"] == "Elementalist"

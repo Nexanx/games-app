@@ -273,7 +273,6 @@ class OpenAICompatibleChatbot:
                 {
                     "name": league.name,
                     "game_version": league.game_version,
-                    "status": league.status,
                     "start_date": league.start_date.isoformat() if league.start_date else None,
                     "end_date": league.end_date.isoformat() if league.end_date else None,
                 }
@@ -287,7 +286,6 @@ class OpenAICompatibleChatbot:
                     "ascendancy": character.ascendancy,
                     "level": character.level,
                     "league": character.league.name if character.league else None,
-                    "status": character.status,
                     "playtime_minutes": character.playtime_minutes,
                     "build_name": character.build_name,
                     "main_skill": character.main_skill,

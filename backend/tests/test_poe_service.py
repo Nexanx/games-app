@@ -3,7 +3,7 @@ from app.services.poe_service import reorder_currency_stats
 
 
 def test_reorder_currency_stats(db_session):
-    league = PoeLeague(name="Loot League", game_version="poe1", status="active")
+    league = PoeLeague(name="Loot League", game_version="poe1")
     db_session.add(league)
     db_session.flush()
     character = PoeCharacter(name="Looty", game_version="poe1", level=90, league_id=league.id)
@@ -19,4 +19,3 @@ def test_reorder_currency_stats(db_session):
     assert [stat.id for stat in reordered[:2]] == [divine.id, chaos.id]
     assert divine.display_order == 0
     assert chaos.display_order == 1
-

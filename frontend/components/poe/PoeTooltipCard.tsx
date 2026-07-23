@@ -1,79 +1,53 @@
-import { CircleDollarSign, Clock3, Gem, ScrollText, Shield, Sparkles, Swords } from "lucide-react";
+import { Clock3, Crown, Gem, Map, Shield, Sparkles, Swords } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
+import { Badge } from "@/components/ui/badge";
 import { formatMinutes } from "@/lib/utils";
-import { poeCategoryLabel, poeCharacterStatusLabel } from "@/lib/poe";
-import type { PoeCharacter, PoeCurrencyStat } from "@/types";
+import type { PoeCharacter } from "@/types";
 
-export function PoeTooltipCard({ character, stats }: { character: PoeCharacter; stats: PoeCurrencyStat[] }) {
-  const primaryStats = stats.slice(0, 12);
+export function PoeTooltipCard({ character }: { character: PoeCharacter }) {
+  const gameLabel = character.game_version === "poe1" ? "Path of Exile 1" : "Path of Exile 2";
 
   return (
-    <article className="poe-tooltip-frame w-full overflow-hidden rounded-lg p-4 text-[#f4dfb3] sm:p-5">
-      <div className="text-center">
-        <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-full border border-[#d8a34b]/60 bg-black/40">
-          <Sparkles className="h-5 w-5 text-[#e0b15f]" aria-hidden="true" />
-        </div>
-        <h2 className="text-xl font-semibold leading-tight text-[#ffe2a4] sm:text-2xl">{character.name}</h2>
-        <p className="mt-1 text-sm text-[#c8a36a]">
-          {character.league?.name ?? "Brak ligi"} · {character.game_version === "poe1" ? "Path of Exile 1" : "Path of Exile 2"}
-        </p>
-      </div>
-
-      <div className="poe-divider my-4" />
-
-      <div className="grid grid-cols-2 gap-2 text-sm">
-        <Rune icon={Shield} label="Klasa" value={`${character.character_class ?? "-"} ${character.ascendancy ?? ""}`.trim()} />
-        <Rune icon={Gem} label="Level" value={String(character.level)} />
-        <Rune icon={Clock3} label="Czas" value={formatMinutes(character.playtime_minutes)} />
-        <Rune icon={Swords} label="Status" value={poeCharacterStatusLabel(character.status)} />
-      </div>
-
-      <div className="poe-divider my-4" />
-
-      <div>
-        <div className="mb-3 flex items-center justify-center gap-2 text-sm uppercase tracking-[0.18em] text-[#d8a34b]">
-          <CircleDollarSign className="h-4 w-4" aria-hidden="true" />
-          Statystyki dropów
-        </div>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          {primaryStats.map((stat) => (
-            <div key={stat.id} className="flex min-h-12 items-center gap-3 rounded-md border border-[#91662e]/45 bg-black/28 px-3 py-2">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded border border-[#d8a34b]/35 bg-[#21160e]">
-                {stat.icon_url ? <img src={stat.icon_url} alt="" className="h-6 w-6 object-contain" /> : <Gem className="h-4 w-4 text-[#e0b15f]" aria-hidden="true" />}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm text-[#f4dfb3]">{stat.name}</p>
-                <p className="truncate text-xs text-[#a88655]">{poeCategoryLabel(stat.category)}</p>
-              </div>
-              <span className="font-semibold text-[#ffd37a]">{stat.value}</span>
-            </div>
-          ))}
-          {!primaryStats.length ? <p className="rounded-md bg-black/25 p-3 text-center text-sm text-[#a88655]">Brak statystyk dropów.</p> : null}
-        </div>
-      </div>
-
-      {character.notes ? (
-        <>
-          <div className="poe-divider my-4" />
-          <div className="flex gap-3 text-sm leading-6 text-[#d9c292]">
-            <ScrollText className="mt-1 h-4 w-4 shrink-0 text-[#d8a34b]" aria-hidden="true" />
-            <p>{character.notes}</p>
+    <article className="overflow-hidden rounded-xl border border-[#91662e]/55 bg-[linear-gradient(135deg,rgba(47,30,18,0.82),rgba(14,18,25,0.96)_58%)] shadow-sm">
+      <div className="flex flex-col gap-4 border-b border-[#91662e]/35 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-[#d8a34b]/45 bg-black/30">
+            <Sparkles className="h-5 w-5 text-[#e0b15f]" aria-hidden="true" />
           </div>
-        </>
-      ) : null}
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#c8a36a]">Postać</p>
+            <h1 className="truncate text-xl font-bold text-[#ffe2a4] sm:text-2xl">{character.name}</h1>
+            {character.build_name ? <p className="truncate text-sm text-[#c9b184]">{character.build_name}</p> : null}
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Badge className="border-[#d8a34b]/40 bg-[#d8a34b]/10 text-[#f2cc83]">{gameLabel}</Badge>
+          <Badge className="border-border bg-background/50 text-foreground">{character.league?.name ?? "Bez ligi"}</Badge>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-px bg-[#91662e]/25 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
+        <SummaryItem icon={Gem} label="Poziom" value={String(character.level)} />
+        <SummaryItem icon={Shield} label="Klasa" value={character.character_class ?? "Brak"} />
+        <SummaryItem icon={Crown} label="Ascendancy" value={character.ascendancy ?? "Brak"} />
+        <SummaryItem icon={Map} label="Liga" value={character.league?.name ?? "Bez ligi"} />
+        <SummaryItem icon={Swords} label="Główna umiejętność" value={character.main_skill ?? "Brak"} />
+        <SummaryItem icon={Sparkles} label="Tryb" value={character.mode ?? "Brak"} />
+        <SummaryItem icon={Clock3} label="Czas gry" value={formatMinutes(character.playtime_minutes)} />
+      </div>
     </article>
   );
 }
 
-function Rune({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: string }) {
+function SummaryItem({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: string }) {
   return (
-    <div className="rounded-md border border-[#91662e]/45 bg-black/24 p-3">
-      <div className="flex items-center gap-2 text-xs text-[#a88655]">
-        <Icon className="h-4 w-4 text-[#d8a34b]" aria-hidden="true" />
-        {label}
+    <div className="min-w-0 bg-background/90 px-3 py-3.5">
+      <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+        <Icon className="h-3.5 w-3.5 shrink-0 text-[#d8a34b]" aria-hidden="true" />
+        <span className="truncate">{label}</span>
       </div>
-      <p className="mt-1 truncate font-semibold text-[#f4dfb3]">{value || "-"}</p>
+      <p className="mt-1 truncate text-sm font-semibold text-foreground" title={value}>{value}</p>
     </div>
   );
 }

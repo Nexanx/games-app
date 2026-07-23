@@ -47,7 +47,6 @@ const schema = z.object({
   build_name: z.string().optional(),
   main_skill: z.string().optional(),
   mode: z.string().optional(),
-  status: z.string().min(1),
   playtime_minutes: z.coerce.number().min(0),
   notes: z.string().optional(),
   pob_code: z.string().max(2_000_000, "Kod PoB jest zbyt duży").optional()
@@ -66,7 +65,6 @@ export function PoeCharacterForm({ leagues, onAdded }: { leagues: PoeLeague[]; o
       name: "",
       game_version: "poe1",
       level: 1,
-      status: "ended",
       playtime_minutes: 0,
       pob_code: ""
     }
@@ -114,7 +112,6 @@ export function PoeCharacterForm({ leagues, onAdded }: { leagues: PoeLeague[]; o
           code: values.pob_code,
           league_id: values.league_id ? Number(values.league_id) : null,
           poe_ninja_url: values.poe_ninja_url || null,
-          status: values.status,
           playtime_minutes: values.playtime_minutes,
           notes: values.notes || null
         });
@@ -123,7 +120,6 @@ export function PoeCharacterForm({ leagues, onAdded }: { leagues: PoeLeague[]; o
           name: values.name,
           game_version: values.game_version,
           level: values.level,
-          status: values.status,
           playtime_minutes: values.playtime_minutes,
           league_id: values.league_id ? Number(values.league_id) : null,
           character_class: values.character_class || null,
@@ -190,7 +186,7 @@ export function PoeCharacterForm({ leagues, onAdded }: { leagues: PoeLeague[]; o
               <Input id="poe-character-ninja" type="url" {...register("poe_ninja_url")} placeholder="https://poe.ninja/builds/..." />
             </Field>
           </div>
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Gra" htmlFor="poe-character-version">
               <Select id="poe-character-version" {...register("game_version")} disabled={Boolean(preview)}>
                 <option value="poe1">Path of Exile 1</option>
@@ -203,14 +199,6 @@ export function PoeCharacterForm({ leagues, onAdded }: { leagues: PoeLeague[]; o
                 {visibleLeagues.map((league) => (
                   <option key={league.id} value={league.id}>{league.name}</option>
                 ))}
-              </Select>
-            </Field>
-            <Field label="Status" htmlFor="poe-character-status">
-              <Select id="poe-character-status" {...register("status")}>
-                <option value="ended">Zakończona</option>
-                <option value="rip">Rip</option>
-                <option value="active">Aktywna</option>
-                <option value="test">Testowa</option>
               </Select>
             </Field>
           </div>

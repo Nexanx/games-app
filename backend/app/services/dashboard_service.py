@@ -138,7 +138,6 @@ def _build_poe_summary(session: Session) -> DashboardPoeSummary:
         league_summary = LeagueSummary(
             name=latest_league.name,
             game_version=latest_league.game_version,
-            status=latest_league.status,
             characters=int(league_stats.character_count),
             playtime_minutes=int(league_stats.playtime_minutes),
         )

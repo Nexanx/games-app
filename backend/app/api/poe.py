@@ -1,17 +1,11 @@
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import desc, select
+from sqlalchemy import desc, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
-from app.core.config import get_settings
 from app.database.session import get_session
-from app.integrations.poe_leagues import (
-    PoeLeagueProvider,
-    PoeLeagueProviderConfigurationError,
-    PoeLeagueProviderRequestError,
-)
 from app.integrations.poe_build import PoeBuildParseError, PoeBuildService
 from app.models import PoeCharacter, PoeCurrencyStat, PoeEquipmentItem, PoeLeague
 from app.schemas.poe import (
@@ -27,12 +21,9 @@ from app.schemas.poe import (
     PoeEquipmentItemRead,
     PoeLeagueCreate,
     PoeLeagueRead,
-    PoeLeagueSyncRequest,
-    PoeLeagueSyncResult,
     PoeLeagueUpdate,
     PoeStatsReorder,
 )
-from app.services.poe_league_service import upsert_poe_leagues
 from app.services.poe_service import reorder_currency_stats
 
 router = APIRouter()
@@ -54,7 +45,7 @@ def create_league(payload: PoeLeagueCreate, db: Session = Depends(get_session)) 
     _validate_league_period(payload.start_date, payload.end_date)
     existing = db.scalar(
         select(PoeLeague).where(
-            PoeLeague.name == payload.name,
+            func.lower(func.trim(PoeLeague.name)) == payload.name.casefold(),
             PoeLeague.game_version == payload.game_version,
         )
     )
@@ -66,35 +57,9 @@ def create_league(payload: PoeLeagueCreate, db: Session = Depends(get_session)) 
         db.commit()
     except IntegrityError as exc:
         db.rollback()
-        raise HTTPException(status_code=409, detail="Nie udało się zapisać kompletnego snapshotu postaci.") from exc
+        raise HTTPException(status_code=409, detail="Liga o tej nazwie już istnieje dla wybranej gry.") from exc
     db.refresh(league)
     return league
-
-
-@router.post("/leagues/sync", response_model=PoeLeagueSyncResult)
-async def sync_leagues(payload: PoeLeagueSyncRequest, db: Session = Depends(get_session)) -> PoeLeagueSyncResult:
-    provider = PoeLeagueProvider(get_settings())
-    try:
-        candidates = await provider.fetch(payload.game_version)
-    except PoeLeagueProviderConfigurationError as exc:
-        raise HTTPException(
-            status_code=503,
-            detail={
-                "code": "POE_LEAGUE_PROVIDER_NOT_CONFIGURED",
-                "message": "POE_API_TOKEN jest wymagany do synchronizacji lig z oficjalnego API Path of Exile.",
-            },
-        ) from exc
-    except PoeLeagueProviderRequestError as exc:
-        raise HTTPException(
-            status_code=502,
-            detail={
-                "code": "POE_LEAGUE_PROVIDER_REQUEST_FAILED",
-                "message": "Nie udało się pobrać lig z oficjalnego API Path of Exile.",
-            },
-        ) from exc
-
-    created, updated, leagues = upsert_poe_leagues(db, candidates)
-    return PoeLeagueSyncResult(created=created, updated=updated, leagues=leagues)
 
 
 @router.patch("/leagues/{league_id}", response_model=PoeLeagueRead)
@@ -112,7 +77,7 @@ def update_league(league_id: int, payload: PoeLeagueUpdate, db: Session = Depend
     duplicate = db.scalar(
         select(PoeLeague).where(
             PoeLeague.id != league.id,
-            PoeLeague.name == next_name,
+            func.lower(func.trim(PoeLeague.name)) == next_name.casefold(),
             PoeLeague.game_version == next_version,
         )
     )
@@ -149,7 +114,6 @@ def delete_league(league_id: int, db: Session = Depends(get_session)) -> None:
 def list_characters(
     game_version: str | None = Query(default=None, pattern="^poe[12]$"),
     league_id: int | None = None,
-    status: str | None = None,
     search: str | None = None,
     sort: str = Query("added", pattern="^(level|playtime|added)$"),
     db: Session = Depends(get_session),
@@ -159,8 +123,6 @@ def list_characters(
         stmt = stmt.where(PoeCharacter.game_version == game_version)
     if league_id:
         stmt = stmt.where(PoeCharacter.league_id == league_id)
-    if status:
-        stmt = stmt.where(PoeCharacter.status == status)
     if search:
         stmt = stmt.where(PoeCharacter.name.ilike(f"%{search}%"))
     if sort == "level":
@@ -214,7 +176,6 @@ def import_pob_character(payload: PoeCharacterPobImport, db: Session = Depends(g
         level=preview.level,
         league_id=payload.league_id,
         poe_ninja_url=payload.poe_ninja_url,
-        status=payload.status,
         playtime_minutes=payload.playtime_minutes,
         snapshot_source="poe_ninja_pob" if payload.poe_ninja_url else "pob",
         notes=payload.notes,

@@ -80,6 +80,7 @@ export interface CompletedGameEntry {
 export interface CompletedGamesYear {
   year: number;
   completed_games_count: number;
+  poe_leagues_count?: number;
 }
 
 export interface CompletedGamesFilters {
@@ -168,6 +169,10 @@ export interface CompletedGamesYearDashboard {
   year: number;
   completed_games_count: number;
   total_playtime_hours: number;
+  poe_playtime_hours?: number;
+  combined_playtime_hours?: number;
+  poe_leagues_count?: number;
+  poe_characters_count?: number;
   average_playtime_hours?: number | null;
   games_with_playtime_count: number;
   average_rating?: number | null;
@@ -192,6 +197,10 @@ export interface CompletedGamesComparisonYear {
   year: number;
   completed_games_count: number;
   total_playtime_hours: number;
+  poe_playtime_hours?: number;
+  combined_playtime_hours?: number;
+  poe_leagues_count?: number;
+  poe_characters_count?: number;
   average_playtime_hours?: number | null;
   average_rating?: number | null;
   monthly: CompletedGamesMonthSummary[];
@@ -204,6 +213,10 @@ export interface CompletedGamesComparison {
 export interface CompletedGamesPeriodMetrics {
   completed_games_count: number;
   total_playtime_hours: number;
+  poe_playtime_hours?: number;
+  combined_playtime_hours?: number;
+  poe_leagues_count?: number;
+  poe_characters_count?: number;
   average_playtime_hours?: number | null;
   median_playtime_hours?: number | null;
   games_with_playtime_count: number;
@@ -321,6 +334,10 @@ export interface CompletedGamesHistoryYear {
   year: number;
   completed_games_count: number;
   total_playtime_hours: number;
+  poe_playtime_hours?: number;
+  combined_playtime_hours?: number;
+  poe_leagues_count?: number;
+  poe_characters_count?: number;
   average_playtime_hours?: number | null;
   average_rating?: number | null;
   platforms: CompletedGamesDistributionItem[];
@@ -369,17 +386,9 @@ export interface PoeLeague {
   game_version: PoeVersion;
   start_date?: string | null;
   end_date?: string | null;
-  status: string;
   notes?: string | null;
   created_at: string;
   updated_at: string;
-}
-
-export interface PoeLeagueSyncResult {
-  created: number;
-  updated: number;
-  leagues: PoeLeague[];
-  source: string;
 }
 
 export interface PoeCharacter {
@@ -396,7 +405,6 @@ export interface PoeCharacter {
   build_name?: string | null;
   main_skill?: string | null;
   mode?: string | null;
-  status: string;
   playtime_minutes: number;
   snapshot_source: "manual" | "pob" | "poe_ninja_pob";
   notes?: string | null;
@@ -483,7 +491,6 @@ export interface DashboardPoeSummary {
   latest_league: {
     name?: string | null;
     game_version?: string | null;
-    status?: string | null;
     characters: number;
     playtime_minutes: number;
   };

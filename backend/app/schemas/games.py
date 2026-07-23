@@ -265,3 +265,4 @@ class CompletedGameEntryRead(CompletedGameEntryBase):
 class CompletedGamesYearRead(BaseModel):
     year: int
     completed_games_count: int
+    poe_leagues_count: int = 0

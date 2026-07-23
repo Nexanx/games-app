@@ -47,6 +47,10 @@ class CompletedGamesYearDashboardRead(BaseModel):
     year: int
     completed_games_count: int
     total_playtime_hours: float
+    poe_playtime_hours: float = 0
+    combined_playtime_hours: float = 0
+    poe_leagues_count: int = 0
+    poe_characters_count: int = 0
     average_playtime_hours: float | None = None
     games_with_playtime_count: int = 0
     average_rating: float | None = None
@@ -71,6 +75,10 @@ class CompletedGamesComparisonYearRead(BaseModel):
     year: int
     completed_games_count: int
     total_playtime_hours: float
+    poe_playtime_hours: float = 0
+    combined_playtime_hours: float = 0
+    poe_leagues_count: int = 0
+    poe_characters_count: int = 0
     average_playtime_hours: float | None = None
     average_rating: float | None = None
     monthly: list[CompletedGamesMonthSummaryRead] = Field(default_factory=list)
@@ -83,6 +91,10 @@ class CompletedGamesComparisonRead(BaseModel):
 class CompletedGamesPeriodMetricsRead(BaseModel):
     completed_games_count: int = 0
     total_playtime_hours: float = 0
+    poe_playtime_hours: float = 0
+    combined_playtime_hours: float = 0
+    poe_leagues_count: int = 0
+    poe_characters_count: int = 0
     average_playtime_hours: float | None = None
     median_playtime_hours: float | None = None
     games_with_playtime_count: int = 0
@@ -200,6 +212,10 @@ class CompletedGamesHistoryYearRead(BaseModel):
     year: int
     completed_games_count: int = 0
     total_playtime_hours: float = 0
+    poe_playtime_hours: float = 0
+    combined_playtime_hours: float = 0
+    poe_leagues_count: int = 0
+    poe_characters_count: int = 0
     average_playtime_hours: float | None = None
     average_rating: float | None = None
     platforms: list[CompletedGamesDistributionItemRead] = Field(default_factory=list)

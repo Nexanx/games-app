@@ -55,7 +55,7 @@ export default function AnalyticsYearPage() {
   const [comparisonError, setComparisonError] = useState<string | null>(null);
   const comparisonInitialized = useRef(false);
 
-  useEffect(() => { if (!validYear) return; const controller = new AbortController(); api.listCompletedYears(controller.signal).then(setYears).catch(() => undefined); return () => controller.abort(); }, [validYear, year]);
+  useEffect(() => { if (!validYear) return; const controller = new AbortController(); api.listAnalyticsYears(controller.signal).then(setYears).catch(() => undefined); return () => controller.abort(); }, [validYear, year]);
 
   useEffect(() => {
     if (!validYear || !needsDashboard) { setLoading(false); setError(null); return; }
@@ -85,8 +85,8 @@ export default function AnalyticsYearPage() {
     {needsDashboard ? <><Button type="button" variant={filtersActive ? "primary" : "secondary"} className="min-h-12 w-full justify-start" aria-expanded={filtersOpen} aria-controls="analytics-filters" onClick={() => setFiltersOpen((value) => !value)}><Filter className="h-5 w-5" aria-hidden="true" />Filtry analizy<span className="ml-auto text-xs font-normal">{filtersActive ? `${activeFiltersCount(filters)} aktywne` : filtersOpen ? "Ukryj" : "Pokaż"}</span></Button>{filtersOpen ? <AnalyticsFilters filters={filters} options={filterOptions} onChange={updateFilters} onRatingChange={updateRating} /> : null}</> : null}
     {loading ? <LoadingState label="Aktualizowanie analiz" /> : null}
     {!loading && error ? <div className="space-y-3"><ErrorState message={error} /><Button type="button" variant="secondary" onClick={() => setRetryKey((value) => value + 1)}><RotateCcw className="h-4 w-4" aria-hidden="true" />Spróbuj ponownie</Button></div> : null}
-    {!loading && !error && needsDashboard && dashboard?.completed_games_count === 0 ? <EmptyAnalysis year={year} filtersActive={filtersActive} onClear={() => updateFilters(emptyFilters)} /> : null}
-    {!loading && !error && dashboard && dashboard.completed_games_count > 0 && section === "summary" ? <CompletedYearDashboard dashboard={dashboard} filters={filters} /> : null}
+    {!loading && !error && needsDashboard && dashboard?.completed_games_count === 0 && (filtersActive || !(dashboard.poe_leagues_count ?? 0)) ? <EmptyAnalysis year={year} filtersActive={filtersActive} onClear={() => updateFilters(emptyFilters)} /> : null}
+    {!loading && !error && dashboard && (dashboard.completed_games_count > 0 || (!filtersActive && (dashboard.poe_leagues_count ?? 0) > 0)) && section === "summary" ? <CompletedYearDashboard dashboard={dashboard} filters={filters} /> : null}
     {!loading && !error && dashboard && dashboard.completed_games_count > 0 && section === "trends" ? <AnalyticsTrends dashboard={dashboard} /> : null}
     {section === "heatmap" ? <AnalyticsHeatmap year={year} /> : null}
     {section === "compare" ? <MonthComparison year={year} /> : null}

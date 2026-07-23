@@ -29,8 +29,7 @@ import type {
   PoeCurrencyStat,
   PoeBuildPreview,
   PoeEquipmentItem,
-  PoeLeague,
-  PoeLeagueSyncResult
+  PoeLeague
 } from "@/types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "/api";
@@ -186,6 +185,7 @@ export const api = {
   reorderBacklog: (ordered_ids: number[]) =>
     request<BacklogEntry[]>("/backlog/reorder", { method: "POST", body: JSON.stringify({ ordered_ids }) }),
   listCompletedYears: (signal?: AbortSignal) => request<CompletedGamesYear[]>("/completed-games/years", { signal }),
+  listAnalyticsYears: (signal?: AbortSignal) => request<CompletedGamesYear[]>("/completed-games/years?include_poe=true", { signal }),
   getCompletedGamesHistory: (signal?: AbortSignal) => request<CompletedGamesHistory>("/completed-games/history", { signal, timeoutMs: 30_000 }),
   listCompletedGames: (year: number, filters: CompletedGamesFilters = {}, signal?: AbortSignal) =>
     request<CompletedGameEntry[]>(`/completed-games${qs({ year, ...filters })}`, { signal }),
@@ -230,11 +230,6 @@ export const api = {
   patchLeague: (id: number, payload: Partial<PoeLeague>) =>
     request<PoeLeague>(`/poe/leagues/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
   deleteLeague: (id: number) => request<void>(`/poe/leagues/${id}`, { method: "DELETE" }),
-  syncLeagues: (game_version?: string) =>
-    request<PoeLeagueSyncResult>("/poe/leagues/sync", {
-      method: "POST",
-      body: JSON.stringify({ game_version: game_version || null })
-    }),
   listCharacters: (params: Record<string, QueryValue> = {}, signal?: AbortSignal) =>
     request<PoeCharacter[]>(`/poe/characters${qs(params)}`, { signal }),
   getCharacter: (id: number, signal?: AbortSignal) => request<PoeCharacter>(`/poe/characters/${id}`, { signal }),
@@ -254,7 +249,6 @@ export const api = {
     code: string;
     league_id?: number | null;
     poe_ninja_url?: string | null;
-    status?: string;
     playtime_minutes?: number;
     notes?: string | null;
   }) => request<PoeCharacter>("/poe/characters/import-pob", {

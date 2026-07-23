@@ -28,7 +28,7 @@ const summary: DashboardSummary = {
   poe: {
     character_count: 1,
     playtime_by_version: { poe1: 0, poe2: 240 },
-    latest_league: { name: "Test League", game_version: "poe2", status: "active", characters: 1, playtime_minutes: 240 }
+    latest_league: { name: "Test League", game_version: "poe2", characters: 1, playtime_minutes: 240 }
   },
   poe_error: null
 };

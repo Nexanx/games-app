@@ -1,11 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { Gem, Skull } from "lucide-react";
+import { Gem } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { poeCharacterStatusLabel } from "@/lib/poe";
 import { formatMinutes } from "@/lib/utils";
 import type { PoeCharacter } from "@/types";
 
@@ -27,12 +26,12 @@ export function PoeCharacterCard({ character }: { character: PoeCharacter }) {
                 {character.character_class ?? "Klasa"} {character.ascendancy ? `· ${character.ascendancy}` : ""}
               </p>
             </div>
-            {character.status === "rip" ? <Skull className="h-5 w-5 text-rose-300" aria-hidden="true" /> : <Gem className="h-5 w-5 text-accent" aria-hidden="true" />}
+            <Gem className="h-5 w-5 text-accent" aria-hidden="true" />
           </div>
           <div className="grid grid-cols-3 gap-2 text-sm">
             <Metric label="Level" value={String(character.level)} />
             <Metric label="Czas" value={formatMinutes(character.playtime_minutes)} />
-            <Metric label="Status" value={poeCharacterStatusLabel(character.status)} />
+            <Metric label="Liga" value={character.league?.name ?? "Bez ligi"} />
           </div>
         </CardContent>
       </Card>

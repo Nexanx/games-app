@@ -6,7 +6,7 @@ from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.database.session import get_session
-from app.models import BacklogEntry, CompletedGameEntry, CustomStatistic, Game
+from app.models import BacklogEntry, CompletedGameEntry, CustomStatistic, Game, PoeCharacter, PoeLeague
 from app.schemas.completed_games import (
     CompletedGamesComparisonRead,
     CompletedGamesForecastRead,
@@ -31,6 +31,7 @@ from app.services.completed_games_service import (
     build_year_dashboard,
     filter_completed_entries,
     get_completed_entries_for_year,
+    get_poe_year_metrics,
 )
 from app.services.analytics_service import (
     build_forecast,
@@ -44,16 +45,41 @@ router = APIRouter()
 
 
 @router.get("/years", response_model=list[CompletedGamesYearRead])
-def list_completed_years(db: Session = Depends(get_session)) -> list[CompletedGamesYearRead]:
+def list_completed_years(
+    include_poe: bool = Query(default=False),
+    db: Session = Depends(get_session),
+) -> list[CompletedGamesYearRead]:
     year_expression = func.extract("year", CompletedGameEntry.completion_date)
     rows = db.execute(
         select(year_expression.label("year"), func.count(CompletedGameEntry.id).label("completed_games_count"))
         .group_by(year_expression)
         .order_by(desc(year_expression))
     ).all()
+    counts = {int(row.year): int(row.completed_games_count) for row in rows}
+    if not include_poe:
+        return [
+            CompletedGamesYearRead(year=year, completed_games_count=count)
+            for year, count in sorted(counts.items(), reverse=True)
+        ]
+    poe_year_expression = func.extract("year", PoeLeague.start_date)
+    poe_rows = db.execute(
+        select(
+            poe_year_expression.label("year"),
+            func.count(func.distinct(PoeLeague.id)).label("poe_leagues_count"),
+        )
+        .select_from(PoeLeague)
+        .join(PoeCharacter, PoeCharacter.league_id == PoeLeague.id)
+        .where(PoeLeague.start_date.is_not(None))
+        .group_by(poe_year_expression)
+    ).all()
+    poe_counts = {int(row.year): int(row.poe_leagues_count) for row in poe_rows}
     return [
-        CompletedGamesYearRead(year=int(row.year), completed_games_count=int(row.completed_games_count))
-        for row in rows
+        CompletedGamesYearRead(
+            year=year,
+            completed_games_count=counts.get(year, 0),
+            poe_leagues_count=poe_counts.get(year, 0),
+        )
+        for year in sorted(counts.keys() | poe_counts.keys(), reverse=True)
     ]
 
 
@@ -126,7 +152,15 @@ def get_completed_games_year_dashboard(
         playtime_min=playtime_min,
         playtime_max=playtime_max,
     )
-    return build_year_dashboard(year, filtered_entries, filter_option_entries=year_entries)
+    poe_leagues_count, poe_characters_count, poe_playtime_hours = get_poe_year_metrics(db, year)
+    return build_year_dashboard(
+        year,
+        filtered_entries,
+        filter_option_entries=year_entries,
+        poe_leagues_count=poe_leagues_count,
+        poe_characters_count=poe_characters_count,
+        poe_playtime_hours=poe_playtime_hours,
+    )
 
 
 @router.get("/comparison", response_model=CompletedGamesComparisonRead)
@@ -153,10 +187,14 @@ def get_completed_games_year_report(
 ) -> CompletedGamesYearReportRead:
     if year < 1900 or year > 9998:
         raise HTTPException(status_code=422, detail="Invalid year")
+    poe_metrics = get_poe_year_metrics(db, year)
+    previous_poe_metrics = get_poe_year_metrics(db, year - 1)
     return build_year_report(
         year,
         get_completed_entries_for_year(db, year),
         get_completed_entries_for_year(db, year - 1),
+        poe_metrics=poe_metrics,
+        previous_poe_metrics=previous_poe_metrics,
     )
 
 

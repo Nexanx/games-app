@@ -22,7 +22,6 @@ services:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-games}:${POSTGRES_PASSWORD:-games}@postgres:5432/${POSTGRES_DB:-games_app}
       FRONTEND_URL: ${PUBLIC_APP_URL:-http://localhost}
       RAWG_API_KEY: ${RAWG_API_KEY:-}
-      POE_API_TOKEN: ${POE_API_TOKEN:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://generativelanguage.googleapis.com/v1beta/openai/}
       OPENAI_MODEL: ${OPENAI_MODEL:-gemini-3.5-flash}

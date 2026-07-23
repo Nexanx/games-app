@@ -9,7 +9,7 @@ from typing import Iterable
 from sqlalchemy import case, desc, func, select
 from sqlalchemy.orm import Session, joinedload
 
-from app.models import CompletedGameEntry, Game
+from app.models import CompletedGameEntry, Game, PoeCharacter, PoeLeague
 from app.schemas.completed_games import (
     CompletedGameHighlightRead,
     CompletedGamesDayActivityRead,
@@ -68,11 +68,32 @@ def build_period_metrics(entries: Iterable[CompletedGameEntry]) -> CompletedGame
     )
 
 
-def build_year_report(year: int, entries: Iterable[CompletedGameEntry], previous_entries: Iterable[CompletedGameEntry]) -> CompletedGamesYearReportRead:
+def build_year_report(
+    year: int,
+    entries: Iterable[CompletedGameEntry],
+    previous_entries: Iterable[CompletedGameEntry],
+    *,
+    poe_metrics: tuple[int, int, float] = (0, 0, 0),
+    previous_poe_metrics: tuple[int, int, float] = (0, 0, 0),
+) -> CompletedGamesYearReportRead:
     items = list(entries)
     previous_items = list(previous_entries)
     summary = build_period_metrics(items)
     previous_summary = build_period_metrics(previous_items)
+    poe_leagues_count, poe_characters_count, poe_playtime_hours = poe_metrics
+    previous_poe_leagues_count, previous_poe_characters_count, previous_poe_playtime_hours = previous_poe_metrics
+    summary = summary.model_copy(update={
+        "poe_leagues_count": poe_leagues_count,
+        "poe_characters_count": poe_characters_count,
+        "poe_playtime_hours": _rounded(poe_playtime_hours),
+        "combined_playtime_hours": _rounded(summary.total_playtime_hours + poe_playtime_hours),
+    })
+    previous_summary = previous_summary.model_copy(update={
+        "poe_leagues_count": previous_poe_leagues_count,
+        "poe_characters_count": previous_poe_characters_count,
+        "poe_playtime_hours": _rounded(previous_poe_playtime_hours),
+        "combined_playtime_hours": _rounded(previous_summary.total_playtime_hours + previous_poe_playtime_hours),
+    })
     monthly = _monthly_summaries(items, include_empty=True, descending=False)
     active = [item for item in monthly if item.completed_games_count]
     ordered = sorted(items, key=lambda entry: (entry.completion_date, entry.game.title.casefold(), entry.id))
@@ -95,8 +116,8 @@ def build_year_report(year: int, entries: Iterable[CompletedGameEntry], previous
         most_playtime_month=most_playtime,
         most_diverse_month=most_diverse,
         insights=_report_insights(summary, most_active, most_playtime),
-        previous_year=year - 1 if previous_items else None,
-        previous_year_differences=_year_differences(summary, previous_summary) if previous_items else [],
+        previous_year=year - 1 if previous_items or previous_poe_leagues_count else None,
+        previous_year_differences=_year_differences(summary, previous_summary) if previous_items or previous_poe_leagues_count else [],
         scatter_games=[_highlight(entry) for entry in items if entry.playtime_hours > 0 and entry.rating is not None],
     )
 
@@ -225,8 +246,22 @@ def build_history_summary(db: Session) -> CompletedGamesHistoryRead:
         .group_by(year_expression)
         .order_by(year_expression)
     ).all()
+    poe_year_expression = func.extract("year", PoeLeague.start_date)
+    poe_yearly_rows = db.execute(
+        select(
+            poe_year_expression.label("year"),
+            func.count(func.distinct(PoeLeague.id)).label("poe_leagues_count"),
+            func.count(PoeCharacter.id).label("poe_characters_count"),
+            func.coalesce(func.sum(PoeCharacter.playtime_minutes), 0).label("poe_playtime_minutes"),
+        )
+        .select_from(PoeLeague)
+        .join(PoeCharacter, PoeCharacter.league_id == PoeLeague.id)
+        .where(PoeLeague.start_date.is_not(None))
+        .group_by(poe_year_expression)
+        .order_by(poe_year_expression)
+    ).all()
 
-    if not yearly_rows:
+    if not yearly_rows and not poe_yearly_rows:
         return CompletedGamesHistoryRead(summary=CompletedGamesPeriodMetricsRead())
 
     aggregate = db.execute(
@@ -277,23 +312,36 @@ def build_history_summary(db: Session) -> CompletedGamesHistoryRead:
         .limit(1)
     ).first()
 
-    yearly = [
-        CompletedGamesHistoryYearRead(
-            year=int(row.year),
-            completed_games_count=int(row.completed_games_count),
-            total_playtime_hours=_rounded(row.total_playtime_hours),
-            average_playtime_hours=_rounded(row.average_playtime_hours) if row.average_playtime_hours is not None else None,
-            average_rating=_rounded(row.average_rating) if row.average_rating is not None else None,
-            platforms=platforms_by_year.get(int(row.year), []),
-            genres=genres_by_year.get(int(row.year), []),
-        )
-        for row in yearly_rows
-    ]
+    games_by_year = {int(row.year): row for row in yearly_rows}
+    poe_by_year = {int(row.year): row for row in poe_yearly_rows}
+    yearly = []
+    for year in sorted(games_by_year.keys() | poe_by_year.keys()):
+        row = games_by_year.get(year)
+        poe_row = poe_by_year.get(year)
+        game_playtime = _rounded(row.total_playtime_hours) if row else 0
+        poe_playtime = _rounded(int(poe_row.poe_playtime_minutes) / 60) if poe_row else 0
+        yearly.append(CompletedGamesHistoryYearRead(
+            year=year,
+            completed_games_count=int(row.completed_games_count) if row else 0,
+            total_playtime_hours=game_playtime,
+            poe_playtime_hours=poe_playtime,
+            combined_playtime_hours=_rounded(game_playtime + poe_playtime),
+            poe_leagues_count=int(poe_row.poe_leagues_count) if poe_row else 0,
+            poe_characters_count=int(poe_row.poe_characters_count) if poe_row else 0,
+            average_playtime_hours=_rounded(row.average_playtime_hours) if row and row.average_playtime_hours is not None else None,
+            average_rating=_rounded(row.average_rating) if row and row.average_rating is not None else None,
+            platforms=platforms_by_year.get(year, []),
+            genres=genres_by_year.get(year, []),
+        ))
     completed_games_count = int(aggregate.completed_games_count)
     rated_games_count = int(aggregate.rated_games_count)
     summary = CompletedGamesPeriodMetricsRead(
         completed_games_count=completed_games_count,
         total_playtime_hours=_rounded(aggregate.total_playtime_hours),
+        poe_playtime_hours=_rounded(sum(item.poe_playtime_hours for item in yearly)),
+        combined_playtime_hours=_rounded(aggregate.total_playtime_hours + sum(item.poe_playtime_hours for item in yearly)),
+        poe_leagues_count=sum(item.poe_leagues_count for item in yearly),
+        poe_characters_count=sum(item.poe_characters_count for item in yearly),
         average_playtime_hours=_rounded(aggregate.average_playtime_hours) if aggregate.average_playtime_hours is not None else None,
         median_playtime_hours=_rounded(median(playtimes)) if playtimes else None,
         games_with_playtime_count=int(aggregate.games_with_playtime_count),
@@ -312,7 +360,7 @@ def build_history_summary(db: Session) -> CompletedGamesHistoryRead:
         summary=summary,
         active_years_count=len(yearly),
         best_year_by_completions=max(yearly, key=lambda item: (item.completed_games_count, item.total_playtime_hours, item.year)),
-        best_year_by_playtime=max(yearly, key=lambda item: (item.total_playtime_hours, item.completed_games_count, item.year)),
+        best_year_by_playtime=max(yearly, key=lambda item: (item.combined_playtime_hours, item.completed_games_count, item.year)),
         yearly=yearly,
         platforms=platforms,
         genres=genres,
@@ -347,7 +395,9 @@ def _comparison_differences(a: CompletedGamesPeriodMetricsRead, b: CompletedGame
 def _year_differences(current: CompletedGamesPeriodMetricsRead, previous: CompletedGamesPeriodMetricsRead) -> list[CompletedGamesPeriodDifferenceRead]:
     return [
         _difference("completed_games_count", previous.completed_games_count, current.completed_games_count),
-        _difference("total_playtime_hours", previous.total_playtime_hours, current.total_playtime_hours),
+        _difference("total_playtime_hours", previous.combined_playtime_hours, current.combined_playtime_hours),
+        _difference("poe_playtime_hours", previous.poe_playtime_hours, current.poe_playtime_hours),
+        _difference("poe_leagues_count", previous.poe_leagues_count, current.poe_leagues_count),
         _difference("average_rating", previous.average_rating, current.average_rating),
         _difference("average_playtime_hours", previous.average_playtime_hours, current.average_playtime_hours),
     ]
@@ -378,8 +428,13 @@ def _report_insights(summary, most_active, most_playtime) -> list[str]:
     insights = []
     if most_active:
         insights.append(f"Najwięcej gier ukończono w {_month_locative(most_active.month)} — {most_active.completed_games_count}.")
-    if summary.games_with_playtime_count:
-        insights.append(f"Łączny czas gry wyniósł {summary.total_playtime_hours:g} godz.")
+    if summary.combined_playtime_hours:
+        insights.append(f"Łączny czas gry wyniósł {summary.combined_playtime_hours:g} godz.")
+    if summary.poe_playtime_hours:
+        insights.append(
+            f"Ligi Path of Exile wniosły {summary.poe_playtime_hours:g} godz. "
+            f"z {summary.poe_leagues_count} ukończonych lig."
+        )
     if summary.top_platform:
         insights.append(f"Najczęściej wybieraną platformą była {summary.top_platform.label}.")
     if summary.top_genre:

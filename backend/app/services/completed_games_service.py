@@ -5,10 +5,10 @@ from datetime import date
 from statistics import median
 from typing import Iterable
 
-from sqlalchemy import and_, desc, or_, select
+from sqlalchemy import and_, desc, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
-from app.models import CompletedGameEntry
+from app.models import CompletedGameEntry, PoeCharacter, PoeLeague
 from app.schemas.completed_games import (
     CompletedGameHighlightRead,
     CompletedGamesComparisonRead,
@@ -29,6 +29,23 @@ def get_completed_entries_for_year(db: Session, year: int) -> list[CompletedGame
         .where(CompletedGameEntry.completion_date >= start, CompletedGameEntry.completion_date < end)
         .order_by(desc(CompletedGameEntry.completion_date), desc(CompletedGameEntry.created_at))
     ).all()
+
+
+def get_poe_year_metrics(db: Session, year: int) -> tuple[int, int, float]:
+    """Return completed leagues, characters and playtime assigned by league start year."""
+    start = date(year, 1, 1)
+    end = date(year + 1, 1, 1)
+    row = db.execute(
+        select(
+            func.count(func.distinct(PoeLeague.id)).label("leagues_count"),
+            func.count(PoeCharacter.id).label("characters_count"),
+            func.coalesce(func.sum(PoeCharacter.playtime_minutes), 0).label("playtime_minutes"),
+        )
+        .select_from(PoeLeague)
+        .join(PoeCharacter, PoeCharacter.league_id == PoeLeague.id)
+        .where(PoeLeague.start_date >= start, PoeLeague.start_date < end)
+    ).one()
+    return int(row.leagues_count), int(row.characters_count), _rounded(int(row.playtime_minutes) / 60)
 
 
 def filter_completed_entries(
@@ -78,6 +95,9 @@ def build_year_dashboard(
     entries: Iterable[CompletedGameEntry],
     *,
     filter_option_entries: Iterable[CompletedGameEntry] | None = None,
+    poe_leagues_count: int = 0,
+    poe_characters_count: int = 0,
+    poe_playtime_hours: float = 0,
 ) -> CompletedGamesYearDashboardRead:
     entry_list = list(entries)
     monthly = _monthly_summaries(entry_list, include_empty=True, descending=False)
@@ -110,6 +130,10 @@ def build_year_dashboard(
         year=year,
         completed_games_count=len(entry_list),
         total_playtime_hours=_rounded(total_playtime),
+        poe_playtime_hours=_rounded(poe_playtime_hours),
+        combined_playtime_hours=_rounded(total_playtime + poe_playtime_hours),
+        poe_leagues_count=poe_leagues_count,
+        poe_characters_count=poe_characters_count,
         average_playtime_hours=_rounded(total_playtime / len(timed_entries)) if timed_entries else None,
         games_with_playtime_count=len(timed_entries),
         average_rating=_rounded(sum(ratings) / len(ratings)) if ratings else None,
@@ -160,11 +184,16 @@ def build_comparison(
         ratings = [entry.rating for entry in entries if entry.rating is not None]
         timed_entries = [entry for entry in entries if entry.playtime_hours > 0]
         total_playtime = sum(entry.playtime_hours for entry in timed_entries)
+        poe_leagues_count, poe_characters_count, poe_playtime_hours = get_poe_year_metrics(db, year)
         result.append(
             CompletedGamesComparisonYearRead(
                 year=year,
                 completed_games_count=len(entries),
                 total_playtime_hours=_rounded(total_playtime),
+                poe_playtime_hours=poe_playtime_hours,
+                combined_playtime_hours=_rounded(total_playtime + poe_playtime_hours),
+                poe_leagues_count=poe_leagues_count,
+                poe_characters_count=poe_characters_count,
                 average_playtime_hours=_rounded(total_playtime / len(timed_entries)) if timed_entries else None,
                 average_rating=_rounded(sum(ratings) / len(ratings)) if ratings else None,
                 monthly=_monthly_summaries(entries, include_empty=True, descending=False),

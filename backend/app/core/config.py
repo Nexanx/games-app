@@ -17,7 +17,6 @@ class Settings(BaseSettings):
     app_name: str = "Games Tracker"
     database_url: str = "postgresql+psycopg://games:games@localhost:5433/games_app"
     rawg_api_key: str | None = None
-    poe_api_token: str | None = None
     openai_api_key: str | None = None
     openai_base_url: str | None = None
     openai_model: str | None = None

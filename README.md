@@ -75,12 +75,11 @@ Moduł PoE jest prywatnym rejestrem postaci i własnych statystyk, a nie pełnym
 
 Aktualnie działają:
 
-- ręczne tworzenie, edycja i usuwanie lig PoE 1 i PoE 2 z datami, statusem i notatką; usunięcie ligi nie kasuje postaci ani dropów;
-- opcjonalna synchronizacja lig z oficjalnego endpointu Path of Exile `GET /league`;
+- ręczne tworzenie, edycja i usuwanie lig PoE 1 i PoE 2 na podstawie nazwy, gry i daty startu; usunięcie ligi nie kasuje postaci ani dropów;
 - zapis końcowego stanu postaci z ligi przez wklejenie kodu PoB skopiowanego z profilu poe.ninja;
 - bezpieczny, lokalny odczyt wersji gry, klasy, ascendancy, poziomu i aktualnie założonych przedmiotów bez wysyłania kodu do zewnętrznej usługi;
 - ręczne tworzenie starszych lub nietypowych wpisów bez kodu PoB;
-- filtrowanie postaci po wersji gry, lidze i statusie, wyszukiwanie po nazwie oraz sortowanie;
+- filtrowanie postaci po wersji gry i lidze, wyszukiwanie po nazwie oraz sortowanie;
 - szczegóły, edycja i usuwanie postaci;
 - responsywny widok końcowego wyposażenia z podglądem pełnych statystyk po najechaniu, ustawieniu fokusu klawiaturą lub dotknięciu przedmiotu;
 - linki do profilu oraz źródłowego widoku poe.ninja;
@@ -96,7 +95,7 @@ Kod PoB nie zawiera adresów ani stabilnych identyfikatorów grafik przedmiotów
 
 ### Integracja z ligami PoE
 
-Automatyczna synchronizacja wymaga tokenu `POE_API_TOKEN` ze scope `service:leagues`. Synchronizacja jest uruchamiana ręcznie z interfejsu, korzysta z realmów `pc` i `poe2`, ma limit 15 sekund na request oraz zwraca kontrolowany błąd przy braku konfiguracji lub awarii API. Ręczne ligi działają bez tokenu.
+Ligi są tworzone ręcznie w aplikacji. Do dodania ligi potrzebne są jej nazwa, wybór Path of Exile 1 albo Path of Exile 2 oraz data startu używana do chronologii i analiz rocznych; projekt nie łączy się z oficjalnym API lig.
 
 ## Stos technologiczny
 
@@ -167,7 +166,6 @@ Opcjonalne integracje:
 
 ```env
 RAWG_API_KEY=
-POE_API_TOKEN=
 OPENAI_API_KEY=
 OPENAI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
 OPENAI_MODEL=gemini-3.5-flash
@@ -175,7 +173,6 @@ LLM_REQUEST_TIMEOUT_SECONDS=60
 ```
 
 - `RAWG_API_KEY` włącza wyszukiwanie, uzupełnianie okładek i metadanych, premiery, rekomendacje oraz migawki ocen zewnętrznych.
-- `POE_API_TOKEN` jest potrzebny wyłącznie do synchronizacji lig.
 - `OPENAI_API_KEY`, `OPENAI_BASE_URL` i `OPENAI_MODEL` włączają chatbota.
 - `LLM_REQUEST_TIMEOUT_SECONDS` musi mieścić się w zakresie `(0, 120]`; frontend czeka 75 sekund, aby backend zdążył zwrócić kontrolowany timeout.
 
@@ -309,7 +306,6 @@ Manifest, service worker i strona offline pozwalają zainstalować aplikację ja
 ### PoE, kopie, Dashboard i chatbot
 
 - `GET/POST /api/poe/leagues`, `PATCH/DELETE /api/poe/leagues/{id}`
-- `POST /api/poe/leagues/sync`
 - `GET/POST /api/poe/characters`, `GET/PATCH/DELETE /api/poe/characters/{id}`
 - `POST /api/poe/pob/preview`, `POST /api/poe/characters/import-pob`
 - `GET /api/poe/characters/{id}/equipment`
@@ -364,13 +360,6 @@ Nie usuwaj wolumenu, jeśli zawiera dane użytkownika.
 ### RAWG nie wyszukuje albo nie pobiera okładki
 
 Uzupełnij `RAWG_API_KEY` i zrestartuj backend. Brak konfiguracji zwraca 503, a awaria dostawcy 502; aplikacja nie podstawia fikcyjnych wyników.
-
-### Synchronizacja lig PoE nie działa
-
-- upewnij się, że `POE_API_TOKEN` ma scope `service:leagues`;
-- zrestartuj backend po zmianie tokenu;
-- ręczne tworzenie i odczyt istniejących lig nie wymagają tokenu;
-- timeout lub błąd oficjalnego API nie usuwa ani nie nadpisuje lokalnych rekordów poza udaną synchronizacją.
 
 ### Kod PoB z poe.ninja nie daje się odczytać
 

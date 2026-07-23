@@ -63,8 +63,8 @@ def test_years_are_counted_sorted_and_year_query_only_returns_requested_year(cli
 
     assert years.status_code == 200
     assert years.json() == [
-        {"year": 2026, "completed_games_count": 2},
-        {"year": 2024, "completed_games_count": 1},
+        {"year": 2026, "completed_games_count": 2, "poe_leagues_count": 0},
+        {"year": 2024, "completed_games_count": 1, "poe_leagues_count": 0},
     ]
     assert [item["game"]["title"] for item in entries.json()] == ["Newest A", "Newest B"]
     assert all(item["completion_date"].startswith("2026-") for item in entries.json())

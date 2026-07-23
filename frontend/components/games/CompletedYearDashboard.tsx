@@ -2,13 +2,13 @@
 
 import { useMemo } from "react";
 import Link from "next/link";
-import { CalendarDays, Clock3, Gamepad2, ListOrdered, Star, Timer, Trophy } from "lucide-react";
+import { CalendarDays, Clock3, Gamepad2, ListOrdered, Star, Swords, Timer, Trophy } from "lucide-react";
 
 import { StatCard } from "@/components/dashboard/StatCard";
 import { GameCover } from "@/components/games/GameCover";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { buildAnalyticsInsights } from "@/lib/analytics";
-import { completedYearFiltersToSearchParams, polishMonthNames, type CompletedYearFilters } from "@/lib/completed-games";
+import { completedYearFiltersToSearchParams, hasCompletedYearFilters, polishMonthNames, type CompletedYearFilters } from "@/lib/completed-games";
 import { metacriticValueLabel } from "@/lib/external-ratings";
 import { asDate, formatHours } from "@/lib/utils";
 import type { CompletedGameHighlight, CompletedGamesDistributionItem, CompletedGamesYearDashboard } from "@/types";
@@ -21,6 +21,10 @@ export function CompletedYearDashboard({
   filters: CompletedYearFilters;
 }) {
   const insights = useMemo(() => buildAnalyticsInsights(dashboard), [dashboard]);
+  const includePoe = !hasCompletedYearFilters(filters);
+  const poePlaytime = dashboard.poe_playtime_hours ?? 0;
+  const combinedPlaytime = dashboard.combined_playtime_hours ?? dashboard.total_playtime_hours + poePlaytime;
+  const displayedPlaytime = includePoe ? combinedPlaytime : dashboard.total_playtime_hours;
   const timeContext = dashboard.games_with_playtime_count < dashboard.completed_games_count
     ? `Dane dla ${dashboard.games_with_playtime_count} z ${dashboard.completed_games_count} wpisów`
     : "Na podstawie wpisów z podanym czasem";
@@ -34,7 +38,8 @@ export function CompletedYearDashboard({
 
       <div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-3">
         <StatCard label="Ukończone gry" value={dashboard.completed_games_count} helper="W wybranym okresie" icon={Gamepad2} accent="text-emerald-300" />
-        <StatCard label="Łączny czas gry" value={dashboard.games_with_playtime_count ? formatHours(dashboard.total_playtime_hours) : "Brak danych"} helper={timeContext} icon={Timer} accent="text-amber-300" />
+        <StatCard label="Łączny czas gry" value={displayedPlaytime > 0 ? formatHours(displayedPlaytime) : "Brak danych"} helper={includePoe && poePlaytime > 0 ? `${formatHours(dashboard.total_playtime_hours)} w grach · ${formatHours(poePlaytime)} w PoE` : timeContext} icon={Timer} accent="text-amber-300" />
+        <StatCard label="Ukończone ligi PoE" value={includePoe ? dashboard.poe_leagues_count ?? 0 : "—"} helper={includePoe ? `${dashboard.poe_characters_count ?? 0} zapisanych postaci` : "Ukryte przy filtrach gier"} icon={Swords} accent="text-orange-300" />
         <StatCard label="Średni czas jednej gry" value={dashboard.average_playtime_hours == null ? "Brak danych" : formatHours(dashboard.average_playtime_hours)} helper={timeContext} icon={Clock3} accent="text-cyan-300" />
         <StatCard label="Średnia moich ocen" value={dashboard.average_rating == null ? "Brak ocen" : `${formatNumber(dashboard.average_rating)}/10`} helper={dashboard.rated_games_count ? `${dashboard.rated_games_count} ocenionych wpisów` : undefined} icon={Star} accent="text-yellow-300" />
         <StatCard label="Najlepiej oceniona gra" value={dashboard.best_rated_game?.title ?? "Brak ocen"} helper={dashboard.best_rated_game?.rating == null ? undefined : `${formatNumber(dashboard.best_rated_game.rating)}/10`} icon={Trophy} accent="text-violet-300" />

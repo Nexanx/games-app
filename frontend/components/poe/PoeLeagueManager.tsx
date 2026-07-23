@@ -9,7 +9,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/services/api";
 import type { PoeLeague } from "@/types";
 
@@ -26,10 +25,7 @@ export function PoeLeagueManager({ leagues, onChanged }: { leagues: PoeLeague[];
       await api.patchLeague(editing.id, {
         name: editing.name,
         game_version: editing.game_version,
-        start_date: editing.start_date || null,
-        end_date: editing.end_date || null,
-        status: editing.status,
-        notes: editing.notes || null
+        start_date: editing.start_date
       });
       await onChanged();
       setEditing(null);
@@ -60,8 +56,8 @@ export function PoeLeagueManager({ leagues, onChanged }: { leagues: PoeLeague[];
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Zapisane ligi</CardTitle>
-        <CardDescription>Edytuj dane ligi lub usuń samo przypisanie bez kasowania postaci.</CardDescription>
+        <CardTitle>Zarządzanie ligami</CardTitle>
+        <CardDescription>Selektory przypisują ligi do postaci; tutaj można zmienić ich nazwę lub grę albo usunąć przypisanie.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         {message ? (
@@ -73,7 +69,7 @@ export function PoeLeagueManager({ leagues, onChanged }: { leagues: PoeLeague[];
           <div key={league.id} className="rounded-lg border border-border bg-background/50 p-3">
             {editing?.id === league.id ? (
               <div className="space-y-3">
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                   <Field label="Nazwa" htmlFor={`league-name-${league.id}`}>
                     <Input id={`league-name-${league.id}`} value={editing.name} onChange={(event) => setEditing({ ...editing, name: event.target.value })} />
                   </Field>
@@ -83,27 +79,12 @@ export function PoeLeagueManager({ leagues, onChanged }: { leagues: PoeLeague[];
                       <option value="poe2">Path of Exile 2</option>
                     </Select>
                   </Field>
-                </div>
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <Field label="Status" htmlFor={`league-status-${league.id}`}>
-                    <Select id={`league-status-${league.id}`} value={editing.status} onChange={(event) => setEditing({ ...editing, status: event.target.value })}>
-                      <option value="active">Aktywna</option>
-                      <option value="completed">Zakończona</option>
-                      <option value="planned">Planowana</option>
-                    </Select>
-                  </Field>
-                  <Field label="Start" htmlFor={`league-start-${league.id}`}>
-                    <Input id={`league-start-${league.id}`} type="date" value={editing.start_date ?? ""} onChange={(event) => setEditing({ ...editing, start_date: event.target.value })} />
-                  </Field>
-                  <Field label="Koniec" htmlFor={`league-end-${league.id}`}>
-                    <Input id={`league-end-${league.id}`} type="date" value={editing.end_date ?? ""} onChange={(event) => setEditing({ ...editing, end_date: event.target.value })} />
+                  <Field label="Data startu" htmlFor={`league-start-date-${league.id}`}>
+                    <Input id={`league-start-date-${league.id}`} type="date" value={editing.start_date ?? ""} onChange={(event) => setEditing({ ...editing, start_date: event.target.value })} required />
                   </Field>
                 </div>
-                <Field label="Notatki" htmlFor={`league-notes-${league.id}`}>
-                  <Textarea id={`league-notes-${league.id}`} value={editing.notes ?? ""} onChange={(event) => setEditing({ ...editing, notes: event.target.value })} />
-                </Field>
                 <div className="flex flex-wrap gap-2">
-                  <Button type="button" onClick={save} disabled={busy || !editing.name.trim()}>
+                  <Button type="button" onClick={save} disabled={busy || !editing.name.trim() || !editing.start_date}>
                     <Save className="h-4 w-4" aria-hidden="true" /> Zapisz
                   </Button>
                   <Button type="button" variant="ghost" onClick={() => setEditing(null)} disabled={busy}>
@@ -116,7 +97,8 @@ export function PoeLeagueManager({ leagues, onChanged }: { leagues: PoeLeague[];
                 <div className="min-w-0">
                   <p className="truncate font-semibold">{league.name}</p>
                   <p className="text-sm text-muted-foreground">
-                    {league.game_version.toUpperCase()} · {league.status} · {league.start_date || "brak daty"}{league.end_date ? ` – ${league.end_date}` : ""}
+                    {league.game_version === "poe1" ? "Path of Exile 1" : "Path of Exile 2"}
+                    {league.start_date ? ` · start ${formatLeagueDate(league.start_date)}` : " · brak daty startu"}
                   </p>
                 </div>
                 <div className="flex shrink-0 gap-2">
@@ -138,4 +120,8 @@ export function PoeLeagueManager({ leagues, onChanged }: { leagues: PoeLeague[];
 
 function Field({ label, htmlFor, children }: { label: string; htmlFor: string; children: ReactNode }) {
   return <div className="space-y-1.5"><Label htmlFor={htmlFor}>{label}</Label>{children}</div>;
+}
+
+function formatLeagueDate(value: string) {
+  return new Intl.DateTimeFormat("pl-PL", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(`${value}T00:00:00`));
 }

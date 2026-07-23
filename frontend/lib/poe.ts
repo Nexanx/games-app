@@ -1,11 +1,3 @@
-export const POE_CHARACTER_STATUS_LABELS: Record<string, string> = {
-  active: "Aktywna",
-  ended: "Zakończona",
-  rip: "Rip",
-  test: "Testowa",
-  deleted: "Usunięta"
-};
-
 export const POE_STAT_CATEGORIES = [
   { value: "currency", label: "Waluta" },
   { value: "maps", label: "Mapy" },
@@ -17,10 +9,6 @@ export const POE_STAT_CATEGORIES = [
   { value: "uniques", label: "Unikaty" },
   { value: "custom", label: "Własna" }
 ] as const;
-
-export function poeCharacterStatusLabel(status: string) {
-  return POE_CHARACTER_STATUS_LABELS[status] ?? status;
-}
 
 export function poeCategoryLabel(category: string) {
   return POE_STAT_CATEGORIES.find((item) => item.value === category)?.label ?? category;

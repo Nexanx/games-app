@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { poeCategoryLabel, poeCharacterStatusLabel, safeHttpUrl } from "../lib/poe";
+import { poeCategoryLabel, safeHttpUrl } from "../lib/poe";
 
 function readProjectFile(path: string) {
   return readFileSync(join(process.cwd(), path), "utf8");
@@ -12,7 +12,7 @@ describe("Path of Exile UI", () => {
   it("uses Polish labels and keyboard focus in the character list", () => {
     const card = readProjectFile("components/poe/PoeCharacterCard.tsx");
 
-    expect(card).toContain("poeCharacterStatusLabel(character.status)");
+    expect(card).toContain('label="Liga"');
     expect(card).toContain("block min-w-0 rounded-lg");
     expect(card).toContain("focus-visible:ring-2");
     expect(card).toContain("`/poe/characters/${character.id}`");
@@ -24,8 +24,9 @@ describe("Path of Exile UI", () => {
 
     expect(tooltip).toContain("character.name");
     expect(tooltip).toContain("character.league?.name");
-    expect(tooltip).toContain("poeCategoryLabel(stat.category)");
-    expect(tooltip).toContain("stat.value");
+    expect(tooltip).toContain("character.main_skill");
+    expect(tooltip).toContain("character.ascendancy");
+    expect(tooltip).not.toContain("character.status");
   });
 
   it("disables unavailable reorder actions and gives icon buttons accessible names", () => {
@@ -38,8 +39,6 @@ describe("Path of Exile UI", () => {
   });
 
   it("keeps stable stored values while translating known labels", () => {
-    expect(poeCharacterStatusLabel("rip")).toBe("Rip");
-    expect(poeCharacterStatusLabel("legacy-custom")).toBe("legacy-custom");
     expect(poeCategoryLabel("league mechanic")).toBe("Mechanika ligowa");
     expect(safeHttpUrl("https://poe.ninja/builds/test")).toBe("https://poe.ninja/builds/test");
     expect(safeHttpUrl("javascript:alert(1)")).toBeNull();
@@ -48,12 +47,13 @@ describe("Path of Exile UI", () => {
   it("loads league options independently from filtered characters and aborts stale requests", () => {
     const page = readProjectFile("app/poe/page.tsx");
     const characterLoader = page.slice(page.indexOf("const loadCharacters"), page.indexOf("const refreshLeagues"));
-    const syncHandler = page.slice(page.indexOf("async function syncPoeLeagues"), page.indexOf("function applySearch"));
 
     expect(characterLoader).toContain("api.listCharacters");
     expect(characterLoader).not.toContain("api.listLeagues");
-    expect(syncHandler).toContain("refreshLeagues");
-    expect(syncHandler).not.toContain("listCharacters");
+    expect(page).not.toContain("syncPoeLeagues");
+    expect(page).not.toContain("Status postaci");
+    expect(page).toContain('id="poe-league-start-date"');
+    expect(page).toContain("start_date: form.start_date");
     expect(page).toContain("new AbortController()");
   });
 
@@ -62,6 +62,9 @@ describe("Path of Exile UI", () => {
 
     expect(details).toContain("setActionMessage");
     expect(details).toContain("Zmiany postaci zostały zapisane");
+    expect(details).toContain("Edytuj postać");
+    expect(details).toContain("setDraft({ ...character })");
+    expect(details).toContain("setDraft(null)");
     expect(details).toContain("window.confirm");
     expect(details).not.toContain("setError(");
   });
@@ -84,8 +87,9 @@ describe("Path of Exile UI", () => {
     const itemParser = readProjectFile("lib/poe-item.ts");
     const details = readProjectFile("app/poe/characters/[id]/page.tsx");
 
-    expect(equipment).toContain("Końcowe wyposażenie");
-    expect(equipment).toContain("md:grid-cols-2 xl:grid-cols-3");
+    expect(equipment).toContain("CORE_SLOT_PLACEMENT");
+    expect(equipment).toContain("md:grid-cols-[9rem_5.5rem_9rem_5.5rem_9rem]");
+    expect(equipment).toContain('key={`${title}-${index}-${line}`}');
     expect(equipment).toContain("createPortal");
     expect(equipment).toContain('role="tooltip"');
     expect(equipment).toContain("onMouseEnter={() => setHovered(true)}");

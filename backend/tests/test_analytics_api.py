@@ -2,7 +2,7 @@ from datetime import date
 
 from sqlalchemy import event
 
-from app.models import CompletedGameEntry, Game
+from app.models import CompletedGameEntry, Game, PoeCharacter, PoeLeague
 from app.services.analytics_service import build_history_summary
 
 
@@ -170,6 +170,33 @@ def test_history_summary_aggregates_all_years_and_category_trends(client, db_ses
     assert payload["yearly"][1]["platforms"][0]["completed_games_count"] == 1
 
 
+def test_poe_league_hours_join_calendar_year_without_counting_as_completed_game(client, db_session):
+    league = PoeLeague(name="Secrets of the Atlas", game_version="poe1", start_date=date(2026, 6, 13))
+    db_session.add(league)
+    db_session.flush()
+    db_session.add_all([
+        PoeCharacter(name="Mapper", game_version="poe1", league_id=league.id, playtime_minutes=615),
+        PoeCharacter(name="Bosser", game_version="poe1", league_id=league.id, playtime_minutes=105),
+    ])
+    db_session.commit()
+
+    years = client.get("/api/completed-games/years", params={"include_poe": True}).json()
+    dashboard = client.get("/api/completed-games/year/2026/dashboard").json()
+    report = client.get("/api/completed-games/year/2026/report").json()
+    history = client.get("/api/completed-games/history").json()
+
+    assert years == [{"year": 2026, "completed_games_count": 0, "poe_leagues_count": 1}]
+    assert dashboard["completed_games_count"] == 0
+    assert dashboard["poe_leagues_count"] == 1
+    assert dashboard["poe_characters_count"] == 2
+    assert dashboard["poe_playtime_hours"] == 12
+    assert dashboard["combined_playtime_hours"] == 12
+    assert report["summary"]["completed_games_count"] == 0
+    assert report["summary"]["poe_playtime_hours"] == 12
+    assert history["summary"]["combined_playtime_hours"] == 12
+    assert history["yearly"][0]["poe_leagues_count"] == 1
+
+
 def test_history_summary_uses_a_constant_number_of_queries(db_session):
     for index in range(12):
         add_completion(db_session, f"Game {index}", date(2024 + index % 3, index % 12 + 1, 10), playtime=10, rating=8)
@@ -185,4 +212,4 @@ def test_history_summary_uses_a_constant_number_of_queries(db_session):
         event.remove(db_session.bind, "before_cursor_execute", record_statement)
 
     assert summary.summary.completed_games_count == 12
-    assert len(statements) == 7
+    assert len(statements) == 8

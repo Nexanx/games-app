@@ -51,7 +51,6 @@ class DashboardGamesSummary(BaseModel):
 class LeagueSummary(BaseModel):
     name: str | None = None
     game_version: str | None = None
-    status: str | None = None
     characters: int = 0
     playtime_minutes: int = 0
 

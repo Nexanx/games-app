@@ -21,17 +21,19 @@ class PoeLeagueBase(BaseModel):
     game_version: str = Field(..., pattern="^poe[12]$")
     start_date: date | None = None
     end_date: date | None = None
-    status: str = "active"
     notes: str | None = None
+
+    @field_validator("name")
+    @classmethod
+    def normalize_name(cls, value: str) -> str:
+        normalized = " ".join(value.split())
+        if not normalized:
+            raise ValueError("Podaj nazwę ligi.")
+        return normalized
 
 
 class PoeLeagueCreate(PoeLeagueBase):
-    @field_validator("status")
-    @classmethod
-    def validate_status(cls, value: str) -> str:
-        if value not in {"active", "completed", "planned"}:
-            raise ValueError("Nieobsługiwany status ligi.")
-        return value
+    start_date: date
 
 
 class PoeLeagueUpdate(BaseModel):
@@ -39,16 +41,17 @@ class PoeLeagueUpdate(BaseModel):
     game_version: str | None = Field(default=None, pattern="^poe[12]$")
     start_date: date | None = None
     end_date: date | None = None
-    status: str | None = None
     notes: str | None = None
 
-    @field_validator("status")
+    @field_validator("name")
     @classmethod
-    def validate_status(cls, value: str | None) -> str | None:
-        if value is not None and value not in {"active", "completed", "planned"}:
-            raise ValueError("Nieobsługiwany status ligi.")
-        return value
-
+    def normalize_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = " ".join(value.split())
+        if not normalized:
+            raise ValueError("Podaj nazwę ligi.")
+        return normalized
 
 class PoeLeagueRead(PoeLeagueBase):
     id: int
@@ -56,17 +59,6 @@ class PoeLeagueRead(PoeLeagueBase):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
-
-
-class PoeLeagueSyncRequest(BaseModel):
-    game_version: str | None = Field(default=None, pattern="^poe[12]$")
-
-
-class PoeLeagueSyncResult(BaseModel):
-    created: int
-    updated: int
-    leagues: list[PoeLeagueRead]
-    source: str = "official_pathofexile_api"
 
 
 class PoeCharacterBase(BaseModel):
@@ -81,20 +73,12 @@ class PoeCharacterBase(BaseModel):
     build_name: str | None = None
     main_skill: str | None = None
     mode: str | None = None
-    status: str = "ended"
     playtime_minutes: int = Field(default=0, ge=0)
     snapshot_source: str = Field(default="manual", pattern="^(manual|pob|poe_ninja_pob)$")
     notes: str | None = None
 
 
 class PoeCharacterCreate(PoeCharacterBase):
-    @field_validator("status")
-    @classmethod
-    def validate_status(cls, value: str) -> str:
-        if value not in {"active", "ended", "rip", "test", "deleted"}:
-            raise ValueError("Nieobsługiwany status postaci.")
-        return value
-
     @field_validator("poe_ninja_url")
     @classmethod
     def validate_poe_ninja_url(cls, value: str | None) -> str | None:
@@ -122,17 +106,9 @@ class PoeCharacterUpdate(BaseModel):
     build_name: str | None = None
     main_skill: str | None = None
     mode: str | None = None
-    status: str | None = None
     playtime_minutes: int | None = Field(default=None, ge=0)
     snapshot_source: str | None = Field(default=None, pattern="^(manual|pob|poe_ninja_pob)$")
     notes: str | None = None
-
-    @field_validator("status")
-    @classmethod
-    def validate_status(cls, value: str | None) -> str | None:
-        if value is not None and value not in {"active", "ended", "rip", "test", "deleted"}:
-            raise ValueError("Nieobsługiwany status postaci.")
-        return value
 
     @field_validator("poe_ninja_url")
     @classmethod
@@ -192,7 +168,6 @@ class PoeCharacterPobImport(PoeBuildCodeRequest):
     name: str = Field(..., min_length=1, max_length=255)
     league_id: int | None = None
     poe_ninja_url: str | None = None
-    status: str = Field(default="ended", pattern="^(active|ended|rip|test|deleted)$")
     playtime_minutes: int = Field(default=0, ge=0)
     notes: str | None = None
 

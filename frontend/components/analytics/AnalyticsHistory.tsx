@@ -40,7 +40,8 @@ export function AnalyticsHistory() {
 
   if (loading && !data) return <LoadingState label="Analizowanie całej historii" />;
   if (error) return <div className="space-y-3"><ErrorState message={error} /><Button variant="secondary" onClick={() => setRetry((value) => value + 1)}>Spróbuj ponownie</Button></div>;
-  if (!data?.summary.completed_games_count) return <Card className="border-dashed"><CardContent className="p-8 text-center"><p className="font-semibold">Brak ukończonych gier do analizy.</p><p className="mt-1 text-sm text-muted-foreground">Podsumowanie całej historii pojawi się po dodaniu pierwszego ukończenia.</p></CardContent></Card>;
+  if (!data) return null;
+  if (!data.summary.completed_games_count && !(data.summary.poe_leagues_count ?? 0)) return <Card className="border-dashed"><CardContent className="p-8 text-center"><p className="font-semibold">Brak ukończonych gier i lig PoE do analizy.</p><p className="mt-1 text-sm text-muted-foreground">Podsumowanie pojawi się po dodaniu pierwszego ukończenia lub postaci ligowej.</p></CardContent></Card>;
   return <HistoryContent data={data} />;
 }
 
@@ -52,13 +53,14 @@ function HistoryContent({ data }: { data: CompletedGamesHistory }) {
   return <div className="space-y-6" aria-busy={false}>
     <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5" aria-label="Podsumowanie całej historii">
       <HistoryStat label="Ukończone gry" value={formatNumber(summary.completed_games_count)} />
-      <HistoryStat label="Łączny czas gry" value={summary.games_with_playtime_count ? formatHours(summary.total_playtime_hours) : "Brak danych"} />
+      <HistoryStat label="Łączny czas gry" value={(summary.combined_playtime_hours ?? summary.total_playtime_hours) > 0 ? formatHours(summary.combined_playtime_hours ?? summary.total_playtime_hours) : "Brak danych"} />
+      <HistoryStat label="Ligi PoE / czas" value={`${summary.poe_leagues_count ?? 0} · ${(summary.poe_playtime_hours ?? 0) > 0 ? formatHours(summary.poe_playtime_hours ?? 0) : "brak czasu"}`} />
       <HistoryStat label="Średnia ocena" value={summary.average_rating == null ? "Brak ocen" : `${formatNumber(summary.average_rating)}/10`} />
       <HistoryStat label="Mediana oceny" value={summary.median_rating == null ? "Brak ocen" : `${formatNumber(summary.median_rating)}/10`} />
       <HistoryStat label="Średni czas gry" value={summary.average_playtime_hours == null ? "Brak danych" : formatHours(summary.average_playtime_hours)} />
       <HistoryStat label="Aktywne lata" value={formatNumber(data.active_years_count)} />
       <HistoryStat label="Najwięcej ukończeń" value={yearMetric(data.best_year_by_completions?.year, data.best_year_by_completions?.completed_games_count, "gier")} href={yearHref(data.best_year_by_completions?.year)} />
-      <HistoryStat label="Najwięcej czasu" value={data.best_year_by_playtime ? `${data.best_year_by_playtime.year} · ${formatHours(data.best_year_by_playtime.total_playtime_hours)}` : "Brak danych"} href={yearHref(data.best_year_by_playtime?.year)} />
+      <HistoryStat label="Najwięcej czasu" value={data.best_year_by_playtime ? `${data.best_year_by_playtime.year} · ${formatHours(data.best_year_by_playtime.combined_playtime_hours ?? data.best_year_by_playtime.total_playtime_hours)}` : "Brak danych"} href={yearHref(data.best_year_by_playtime?.year)} />
       <HistoryStat label="Najczęstsza platforma" value={summary.top_platform?.label ?? "Brak danych"} />
       <HistoryStat label="Najczęstszy gatunek" value={summary.top_genre?.label ?? "Brak danych"} />
     </section>
@@ -70,7 +72,7 @@ function HistoryContent({ data }: { data: CompletedGamesHistory }) {
 
     <section className="grid gap-4 xl:grid-cols-2" aria-label="Wyniki według roku">
       <YearBarChart title="Liczba ukończonych gier w każdym roku" description="Każdy słupek używa jednej jednostki: liczby ukończeń." data={yearly} dataKey="completed_games_count" name="Ukończone gry" formatter={(value) => `${formatNumber(value)} gier`} color="#34d399" />
-      <YearBarChart title="Łączny czas gry w każdym roku" description="Czas jest sumowany wyłącznie z wpisów, które mają podaną wartość." data={yearly} dataKey="total_playtime_hours" name="Czas gry" formatter={formatHours} color="#22d3ee" />
+      <YearBarChart title="Łączny czas gry w każdym roku" description="Suma czasu ukończonych gier i postaci z lig PoE rozpoczętych w danym roku." data={yearly} dataKey="total_playtime_hours" name="Czas gry" formatter={formatHours} color="#22d3ee" />
     </section>
 
     <Card><CardHeader><CardTitle>Średnia ocena według roku</CardTitle><CardDescription>Brak punktu oznacza rok bez ocen użytkownika. Skala pozostaje 0–10.</CardDescription></CardHeader><CardContent><div className="h-80" role="img" aria-label="Średnia ocena gier w kolejnych latach"><ResponsiveContainer width="100%" height="100%"><LineChart data={yearly} margin={{ top: 12, right: 20, bottom: 8, left: 0 }}><CartesianGrid strokeDasharray="3 3" stroke="#334155" /><XAxis dataKey="year" stroke="#94a3b8" /><YAxis domain={[0, 10]} stroke="#94a3b8" /><Tooltip contentStyle={tooltipStyle} formatter={(value) => [`${formatNumber(Number(value))}/10`, "Średnia ocena"]} /><Line type="monotone" dataKey="average_rating" name="Średnia ocena" stroke="#fbbf24" strokeWidth={3} connectNulls={false} isAnimationActive={false} /></LineChart></ResponsiveContainer></div></CardContent></Card>
@@ -80,7 +82,7 @@ function HistoryContent({ data }: { data: CompletedGamesHistory }) {
       <CategoryChart title="Gatunki na przestrzeni lat" description="Pięć najczęstszych gatunków. Gra wielogatunkowa może należeć do kilku segmentów." data={genreData} />
     </section>
 
-    <Card><CardHeader><CardTitle>Przejdź do konkretnego roku</CardTitle><CardDescription>„Cała historia” pozostaje osobnym trybem i nie jest dodawana jako sztuczny rok.</CardDescription></CardHeader><CardContent className="flex flex-wrap gap-2">{data.yearly.map((item) => <Link key={item.year} href={`/analytics/${item.year}`}><Button variant="secondary">{item.year} · {item.completed_games_count} gier</Button></Link>)}</CardContent></Card>
+    <Card><CardHeader><CardTitle>Przejdź do konkretnego roku</CardTitle><CardDescription>„Cała historia” pozostaje osobnym trybem i nie jest dodawana jako sztuczny rok.</CardDescription></CardHeader><CardContent className="flex flex-wrap gap-2">{data.yearly.map((item) => <Link key={item.year} href={`/analytics/${item.year}`}><Button variant="secondary">{item.year} · {item.completed_games_count} gier · {item.poe_leagues_count ?? 0} lig PoE</Button></Link>)}</CardContent></Card>
   </div>;
 }
 

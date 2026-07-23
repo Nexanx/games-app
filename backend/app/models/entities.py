@@ -135,7 +135,6 @@ class PoeLeague(Base, TimestampMixin):
     game_version: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
     start_date: Mapped[date | None] = mapped_column(Date)
     end_date: Mapped[date | None] = mapped_column(Date)
-    status: Mapped[str] = mapped_column(String(40), default="active", nullable=False)
     notes: Mapped[str | None] = mapped_column(Text)
 
     characters: Mapped[list["PoeCharacter"]] = relationship(back_populates="league")
@@ -158,7 +157,6 @@ class PoeCharacter(Base, TimestampMixin):
     build_name: Mapped[str | None] = mapped_column(String(255))
     main_skill: Mapped[str | None] = mapped_column(String(255))
     mode: Mapped[str | None] = mapped_column(String(100))
-    status: Mapped[str] = mapped_column(String(40), default="ended", nullable=False, index=True)
     playtime_minutes: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     snapshot_source: Mapped[str] = mapped_column(String(40), default="manual", nullable=False)
     notes: Mapped[str | None] = mapped_column(Text)

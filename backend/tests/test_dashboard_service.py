@@ -51,7 +51,7 @@ def test_dashboard_summary_uses_current_year_and_backlog_order(db_session):
 
 
 def test_dashboard_keeps_poe_as_a_compact_secondary_summary(db_session):
-    league = PoeLeague(name="Test League", game_version="poe2", status="active")
+    league = PoeLeague(name="Test League", game_version="poe2")
     db_session.add(league)
     db_session.flush()
     db_session.add(PoeCharacter(name="TestChar", game_version="poe2", level=88, league_id=league.id, playtime_minutes=240))

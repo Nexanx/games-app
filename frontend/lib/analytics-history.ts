@@ -13,7 +13,7 @@ export function historyYearChartData(years: CompletedGamesHistoryYear[]): Histor
     .map((item) => ({
       year: item.year,
       completed_games_count: item.completed_games_count,
-      total_playtime_hours: item.total_playtime_hours,
+      total_playtime_hours: item.combined_playtime_hours ?? item.total_playtime_hours,
       average_rating: item.average_rating ?? null
     }));
 }

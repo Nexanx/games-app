@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field, model_validator
 from app.schemas.games import ExternalRating
 
 
-BACKUP_FORMAT_VERSION = 3
+BACKUP_FORMAT_VERSION = 4
 
 
 class BackupGame(BaseModel):
@@ -64,7 +64,6 @@ class BackupPoeLeague(BaseModel):
     game_version: str
     start_date: date | None = None
     end_date: date | None = None
-    status: str
     notes: str | None = None
     created_at: datetime
     updated_at: datetime
@@ -83,7 +82,6 @@ class BackupPoeCharacter(BaseModel):
     build_name: str | None = None
     main_skill: str | None = None
     mode: str | None = None
-    status: str
     playtime_minutes: int = Field(..., ge=0)
     snapshot_source: str = "manual"
     notes: str | None = None
@@ -208,7 +206,7 @@ class BackupData(BaseModel):
 
 
 class BackupDocument(BaseModel):
-    format_version: Literal[1, 2, BACKUP_FORMAT_VERSION] = BACKUP_FORMAT_VERSION
+    format_version: Literal[1, 2, 3, BACKUP_FORMAT_VERSION] = BACKUP_FORMAT_VERSION
     exported_at: datetime
     app_name: str = "Games Tracker"
     data: BackupData
