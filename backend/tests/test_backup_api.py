@@ -9,7 +9,9 @@ from app.models import (
     CompletedGameEntry,
     CustomStatistic,
     Game,
+    GameDiscoveryPreferences,
     GameRecommendationFeedback,
+    HiddenGameRelease,
     PoeCharacter,
     PoeCurrencyStat,
     PoeEquipmentItem,
@@ -73,6 +75,28 @@ def seed_backup_data(db_session):
             tags=["Space"],
         )
     )
+    db_session.add(
+        GameDiscoveryPreferences(
+            id=1,
+            platforms=["PC"],
+            genres=["RPG"],
+        )
+    )
+    db_session.add(
+        HiddenGameRelease(
+            external_source="rawg",
+            external_id="1000",
+            title="Hidden Release",
+            game_payload={
+                "title": "Hidden Release",
+                "genres": ["RPG"],
+                "platforms": ["PC"],
+                "external_id": "1000",
+                "external_source": "RAWG",
+                "source": "RAWG",
+            },
+        )
+    )
     db_session.commit()
 
 
@@ -87,7 +111,7 @@ def test_export_and_replace_import_restore_relations_without_secrets(client, db_
     imported = client.post("/api/backup/import", json={"mode": "replace", "backup": payload})
 
     assert exported.status_code == 200
-    assert payload["format_version"] == 4
+    assert payload["format_version"] == 5
     assert "OPENAI_API_KEY" not in exported.text
     assert imported.status_code == 200
     assert imported.json()["restored"]["games"] == 1
@@ -99,6 +123,8 @@ def test_export_and_replace_import_restore_relations_without_secrets(client, db_
     assert db_session.scalar(select(func.count(PoeEquipmentItem.id))) == 1
     assert db_session.scalar(select(func.count(ChatMessage.id))) == 1
     assert db_session.scalar(select(func.count(GameRecommendationFeedback.id))) == 1
+    assert db_session.scalar(select(func.count(GameDiscoveryPreferences.id))) == 1
+    assert db_session.scalar(select(func.count(HiddenGameRelease.id))) == 1
     restored_completed = db_session.scalar(select(CompletedGameEntry))
     restored_game = db_session.scalar(select(Game))
     restored_statistic = db_session.scalar(select(CustomStatistic))
@@ -106,6 +132,8 @@ def test_export_and_replace_import_restore_relations_without_secrets(client, db_
     assert restored_game.external_ratings == [{"source": "RAWG", "value": 4.4, "scale": 5.0, "count": 123}]
     assert restored_statistic.completed_game_entry_id == restored_completed.id
     assert db_session.scalar(select(GameRecommendationFeedback)).tags == ["Space"]
+    assert db_session.get(GameDiscoveryPreferences, 1).platforms == ["PC"]
+    assert db_session.scalar(select(HiddenGameRelease)).title == "Hidden Release"
 
 
 def test_invalid_import_never_replaces_existing_data(client, db_session):
@@ -176,3 +204,19 @@ def test_version_three_backup_with_legacy_poe_statuses_remains_importable(client
     assert response.status_code == 200
     assert db_session.scalar(select(func.count(PoeLeague.id))) == 1
     assert db_session.scalar(select(func.count(PoeCharacter.id))) == 1
+
+
+def test_version_four_backup_remains_importable_without_release_preferences(client, db_session):
+    seed_backup_data(db_session)
+    payload = client.get("/api/backup/export").json()
+    payload["format_version"] = 4
+    payload["data"].pop("discovery_preferences")
+    payload["data"].pop("hidden_game_releases")
+
+    response = client.post("/api/backup/import", json={"mode": "replace", "backup": payload})
+
+    assert response.status_code == 200
+    assert response.json()["restored"]["discovery_preferences"] == 0
+    assert response.json()["restored"]["hidden_game_releases"] == 0
+    assert db_session.scalar(select(func.count(GameDiscoveryPreferences.id))) == 0
+    assert db_session.scalar(select(func.count(HiddenGameRelease.id))) == 0

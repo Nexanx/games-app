@@ -17,6 +17,7 @@ from typing import Sequence
 GRACEFUL_TIMEOUT_SECONDS = 5.0
 FORCED_TIMEOUT_SECONDS = 3.0
 PORT_RELEASE_TIMEOUT_SECONDS = 3.0
+LAUNCHER_EXIT_PORT_GRACE_SECONDS = 1.0
 
 
 @dataclass(frozen=True)
@@ -30,6 +31,7 @@ class ProcessSpec:
 class ManagedProcess:
     spec: ProcessSpec
     process: subprocess.Popen[bytes]
+    launcher_exit_reported: bool = False
 
 
 if os.name == "nt":
@@ -170,9 +172,24 @@ class ProcessSupervisor:
             print("Naciśnij Ctrl+C, aby zatrzymać całą aplikację.", flush=True)
 
             while True:
-                for managed in self.managed:
+                for index, managed in enumerate(self.managed):
                     exit_code = managed.process.poll()
                     if exit_code is not None:
+                        port = self.ports[index] if index < len(self.ports) else None
+                        if port is not None and wait_for_port_open(
+                            port,
+                            LAUNCHER_EXIT_PORT_GRACE_SECONDS,
+                        ):
+                            if not managed.launcher_exit_reported:
+                                print(
+                                    f"{managed.spec.name}: proces uruchamiający zakończył działanie "
+                                    f"(kod {exit_code}), ale usługa nadal działa na porcie {port}. "
+                                    "Kontynuowanie nadzoru procesu potomnego.",
+                                    file=sys.stderr,
+                                    flush=True,
+                                )
+                                managed.launcher_exit_reported = True
+                            continue
                         print(
                             f"{managed.spec.name} zakończył działanie (kod {exit_code}). "
                             "Zatrzymywanie pozostałych procesów...",
@@ -271,6 +288,15 @@ def is_port_open(port: int) -> bool:
 
 def ports_are_released(ports: Sequence[int]) -> bool:
     return all(not is_port_open(port) for port in ports)
+
+
+def wait_for_port_open(port: int, timeout: float) -> bool:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if is_port_open(port):
+            return True
+        time.sleep(0.1)
+    return is_port_open(port)
 
 
 def wait_for_ports_released(ports: Sequence[int], timeout: float) -> bool:

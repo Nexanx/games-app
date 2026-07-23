@@ -29,6 +29,9 @@ export interface GameSearchResult extends Omit<Game, "id" | "created_at" | "upda
   source: string;
   tags?: string[];
   release_date_tba?: boolean;
+  already_on_backlog?: boolean;
+  already_completed?: boolean;
+  hidden?: boolean;
   platform_release_dates?: Array<{
     platform: string;
     release_date?: string | null;
@@ -115,12 +118,42 @@ export interface GameReleasesPage extends GameSearchPage {
   source: "RAWG";
 }
 
+export type ReleaseMatchLevel = "strict" | "balanced" | "discovery";
+export type ReleaseViewMode = "for_you" | "all" | "hidden";
+
+export interface GameReleaseRecommendation {
+  game: GameSearchResult;
+  score: number;
+  match_label: "Bardzo dobre dopasowanie" | "Dobre dopasowanie" | "Może Cię zainteresować";
+  reasons: string[];
+}
+
+export interface GameRecommendedReleasesPage {
+  results: GameReleaseRecommendation[];
+  page: number;
+  page_size: number;
+  has_next: boolean;
+  personalized: boolean;
+  notice?: string | null;
+  match_level: ReleaseMatchLevel;
+  source: "RAWG";
+}
+
+export interface GameDiscoveryPreferences {
+  platforms: string[];
+  genres: string[];
+}
+
 export interface GameReleaseFilters {
   date_from: string;
   date_to: string;
   platform?: string;
   genre?: string;
   search?: string;
+  minimum_rating?: number | string;
+  release_status?: "all" | "upcoming" | "released" | "tba";
+  sort?: "release_date" | "rating" | "title";
+  match_level?: ReleaseMatchLevel;
   page?: number;
   page_size?: number;
 }

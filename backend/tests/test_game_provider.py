@@ -166,14 +166,26 @@ async def test_game_provider_discovers_games_with_server_side_filters(monkeypatc
             return None
 
         async def get(self, url, *, params):
+            captured["calls"] = int(captured.get("calls", 0)) + 1
             captured["url"] = url
             captured["params"] = params
             return FakeResponse()
 
     monkeypatch.setattr(game_provider.httpx, "AsyncClient", FakeAsyncClient)
+    game_provider.clear_discovery_cache()
     provider = GameProvider(Settings(rawg_api_key="test-key"))
 
     result = await provider.discover(
+        page=2,
+        page_size=20,
+        date_from=game_provider.date(2026, 8, 1),
+        date_to=game_provider.date(2026, 8, 31),
+        genres=["role-playing-games-rpg"],
+        parent_platforms=[1, 2],
+        query="witcher",
+        ordering="released",
+    )
+    cached_result = await provider.discover(
         page=2,
         page_size=20,
         date_from=game_provider.date(2026, 8, 1),
@@ -197,6 +209,8 @@ async def test_game_provider_discovers_games_with_server_side_filters(monkeypatc
         "search_precise": True,
     }
     assert len(result.results) == 1
+    assert len(cached_result.results) == 1
+    assert captured["calls"] == 1
     assert result.results[0].title == "Incomplete release"
     assert result.results[0].genres == []
     assert result.results[0].platforms == []

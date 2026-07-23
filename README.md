@@ -21,7 +21,10 @@ Projekt nie ma własnych kont ani ról. Next.js odpowiada za interfejs, a FastAP
 - wykrywanie duplikatów oraz atomowe dodawanie grupy wyników;
 - własna kolejność drag-and-drop, preferowana platforma, notatka, filtrowanie i sortowanie;
 - rekomendacje RAWG dopasowywane do ocen, gatunków, platform oraz trwałych reakcji „Pasuje do mnie” / „Nie dla mnie”; opinię można od razu cofnąć, a „Ukryj” działa neutralnie tylko w bieżącej przeglądarce;
-- osobny widok premier RAWG z filtrowaniem po dacie, platformie, gatunku i tytule; terminy premier, zwłaszcza przyszłe i zależne od platformy, mogą się zmienić;
+- premiery RAWG domyślnie pokazują deterministyczny ranking „Dla Ciebie” oparty na tym samym profilu ocen, gatunków, platform i reakcji co zwykłe rekomendacje;
+- poziomy `Ścisłe`, `Zrównoważone` i `Odkrywanie` zmieniają próg oraz udział różnorodności, a nie uruchamiają trzech niezależnych algorytmów;
+- obserwowane platformy i gatunki można ustawić ręcznie; pełny kalendarz pozostaje dostępny jako `Wszystkie premiery`, a trwale ukryte pozycje można przywrócić;
+- filtry premier obejmują datę, platformę, gatunek, tytuł, minimalną ocenę zewnętrzną i status wydania; terminy, zwłaszcza przyszłe i zależne od platformy, mogą się zmienić;
 - lista pozostaje niezależna od historii ukończeń.
 
 ### Oceny zewnętrzne
@@ -247,7 +250,7 @@ Migracje uruchamiaj z katalogu `backend`:
 .\.venv\Scripts\python.exe -m alembic upgrade head
 ```
 
-Rewizje tworzą pierwotny model, bezpiecznie rozdzielają backlog od powtarzalnych ukończeń i dodają indeksy używane przez deduplikację RAWG, kolejność backlogu, historię chatbota oraz listy lig/postaci/statystyk PoE. Kolejne migracje dodają bez zmiany istniejących wpisów zewnętrzne oceny gier i osobną tabelę opinii o rekomendacjach. Migracje PoE dodają niedestrukcyjnie źródło snapshotu i tabelę `poe_equipment_items`. Unikalność nazwy ligi obowiązuje w obrębie wersji gry; migracja zatrzyma się bez zmiany danych, jeśli wcześniej zapisano duplikaty wymagające ręcznego rozstrzygnięcia.
+Rewizje tworzą pierwotny model, bezpiecznie rozdzielają backlog od powtarzalnych ukończeń i dodają indeksy używane przez deduplikację RAWG, kolejność backlogu, historię chatbota oraz listy lig/postaci/statystyk PoE. Kolejne migracje dodają bez zmiany istniejących wpisów zewnętrzne oceny gier, osobną tabelę opinii o rekomendacjach oraz niedestrukcyjne tabele preferencji odkrywania i ukrytych premier. Migracje PoE dodają niedestrukcyjnie źródło snapshotu i tabelę `poe_equipment_items`. Unikalność nazwy ligi obowiązuje w obrębie wersji gry; migracja zatrzyma się bez zmiany danych, jeśli wcześniej zapisano duplikaty wymagające ręcznego rozstrzygnięcia.
 
 Seed nie dodaje przykładowych gier ani danych PoE:
 
@@ -257,7 +260,7 @@ Seed nie dodaje przykładowych gier ani danych PoE:
 
 ## Kopie danych
 
-Karta **Kopia zapasowa** na Dashboardzie eksportuje jeden plik JSON (`format_version: 3`) zawierający gry, backlog, ukończenia, własne statystyki, ligi, snapshoty postaci, wyposażenie, statystyki PoE, historię rozmów oraz zapisane opinie o rekomendacjach. Import pozostaje zgodny ze starszymi formatami `1` i `2`; brakujące w nich pola są uzupełniane bez zmiany danych użytkownika. Sekrety, wartości `.env` i surowe kody PoB nie są eksportowane.
+Karta **Kopia zapasowa** na Dashboardzie eksportuje jeden plik JSON (`format_version: 5`) zawierający gry, backlog, ukończenia, własne statystyki, ligi, snapshoty postaci, wyposażenie, statystyki PoE, historię rozmów, zapisane opinie o rekomendacjach, preferencje premier i ukryte premiery. Import pozostaje zgodny ze starszymi formatami `1`–`4`; brakujące w nich pola są uzupełniane bez zmiany danych użytkownika. Sekrety, wartości `.env` i surowe kody PoB nie są eksportowane.
 
 Import działa wyłącznie w trybie `replace`. Backend najpierw waliduje cały dokument i relacje, a następnie zastępuje dane w jednej transakcji. Nieprawidłowy plik lub błąd zapisu wycofuje operację. Nie ma trybu scalania.
 
@@ -294,7 +297,10 @@ Manifest, service worker i strona offline pozwalają zainstalować aplikację ja
 
 - `GET /api/games/search?query=Hades&page=1&page_size=10`
 - `GET /api/games/recommendations`, `PUT/DELETE /api/games/recommendations/feedback`
-- `GET /api/games/releases?date_from=2026-08-01&date_to=2026-08-31`, `GET /api/games/rawg/{external_id}`
+- `GET /api/games/releases?date_from=2026-08-01&date_to=2026-08-31` — pełny kalendarz
+- `GET /api/games/releases/recommended?match_level=balanced` — spersonalizowane premiery
+- `GET/PUT /api/games/releases/preferences`, `GET/PUT/DELETE /api/games/releases/hidden`
+- `GET /api/games/rawg/{external_id}`
 - `GET/POST /api/games`, `GET/PATCH/DELETE /api/games/{id}`
 - `GET/POST /api/backlog`, `GET/PATCH/DELETE /api/backlog/{id}`
 - `POST /api/backlog/batch`, `POST /api/backlog/reorder`

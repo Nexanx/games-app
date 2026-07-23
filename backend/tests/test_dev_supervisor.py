@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import socket
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -110,6 +111,49 @@ def test_supervisor_returns_the_failed_child_exit_code_and_stops_the_other(tmp_p
 
     assert supervisor.run() == 7
     assert all(item.process.poll() is not None for item in supervisor.managed)
+
+
+def test_supervisor_keeps_running_when_launcher_hands_service_off_to_child(tmp_path):
+    port = get_free_port()
+    server_code = (
+        "import socket,time;"
+        "server=socket.socket();"
+        "server.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1);"
+        f"server.bind(('127.0.0.1',{port}));"
+        "server.listen();"
+        "time.sleep(2)"
+    )
+    launcher_code = (
+        "import subprocess,sys,time;"
+        f"subprocess.Popen([sys.executable,'-c',{server_code!r}]);"
+        "time.sleep(0.4)"
+    )
+    supervisor = ProcessSupervisor(
+        [
+            ProcessSpec("handed-off service", (sys.executable, "-c", launcher_code), tmp_path),
+            ProcessSpec("sibling service", (sys.executable, "-c", "import time; time.sleep(60)"), tmp_path),
+        ],
+        [port],
+    )
+    result: list[int] = []
+    run_thread = threading.Thread(target=lambda: result.append(supervisor.run()), daemon=True)
+
+    try:
+        run_thread.start()
+        assert wait_until(lambda: dev_supervisor.is_port_open(port))
+        assert wait_until(lambda: supervisor.managed[0].process.poll() is not None)
+        time.sleep(0.2)
+
+        assert run_thread.is_alive()
+        assert supervisor.managed[1].process.poll() is None
+
+        run_thread.join(timeout=5)
+        assert not run_thread.is_alive()
+        assert result == [1]
+        assert wait_until(lambda: not dev_supervisor.is_port_open(port))
+        assert supervisor.managed[1].process.poll() is not None
+    finally:
+        supervisor.shutdown()
 
 
 def test_start_script_uses_scoped_supervision_and_tracks_database_ownership():

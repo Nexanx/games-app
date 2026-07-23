@@ -104,7 +104,13 @@ describe("application UI configuration", () => {
     expect(backlog).toContain("<GameRecommendations");
     expect(backlog.indexOf("<GameRecommendations")).toBeGreaterThan(backlog.indexOf("<BacklogList"));
     expect(releases).toContain("Premiery");
-    expect(releases).toContain("Daty, szczególnie przyszłe i zależne od platformy, mogą ulec zmianie.");
+    expect(releases).toContain("Dla Ciebie");
+    expect(releases).toContain("Wszystkie premiery");
+    expect(releases).toContain("Ukryte premiery");
+    expect(releases).toContain("Nie interesuje mnie");
+    expect(releases).toContain("getRecommendedGameReleases");
+    expect(releases).toContain("saveGameReleasePreferences");
+    expect(releases).toContain("matchLevel");
     expect(recommendations).toContain("Polecane dla Ciebie");
     expect(recommendations).toContain("Dodaj do ogrania");
     expect(recommendations).toContain("Pasuje do mnie");

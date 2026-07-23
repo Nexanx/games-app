@@ -63,6 +63,9 @@ class GameSearchResult(GameBase):
     tags: list[str] = Field(default_factory=list)
     release_date_tba: bool = False
     platform_release_dates: list["GamePlatformReleaseDate"] = Field(default_factory=list)
+    already_on_backlog: bool = False
+    already_completed: bool = False
+    hidden: bool = False
 
 
 class GamePlatformReleaseDate(BaseModel):
@@ -115,6 +118,60 @@ class GameReleasesPage(BaseModel):
     page_size: int = Field(..., ge=1)
     has_next: bool = False
     source: Literal["RAWG"] = "RAWG"
+
+
+ReleaseMatchLevel = Literal["strict", "balanced", "discovery"]
+
+
+class GameReleaseRecommendation(BaseModel):
+    game: GameSearchResult
+    score: float = Field(..., ge=0, le=100)
+    match_label: Literal[
+        "Bardzo dobre dopasowanie",
+        "Dobre dopasowanie",
+        "Może Cię zainteresować",
+    ]
+    reasons: list[str] = Field(default_factory=list)
+
+
+class GameRecommendedReleasesPage(BaseModel):
+    results: list[GameReleaseRecommendation] = Field(default_factory=list)
+    page: int = Field(..., ge=1)
+    page_size: int = Field(..., ge=1)
+    has_next: bool = False
+    personalized: bool
+    notice: str | None = None
+    match_level: ReleaseMatchLevel
+    source: Literal["RAWG"] = "RAWG"
+
+
+class GameDiscoveryPreferencesUpdate(BaseModel):
+    platforms: list[str] = Field(default_factory=list, max_length=20)
+    genres: list[str] = Field(default_factory=list, max_length=30)
+
+    @field_validator("platforms", "genres")
+    @classmethod
+    def clean_discovery_features(cls, values: list[str]) -> list[str]:
+        cleaned: list[str] = []
+        seen: set[str] = set()
+        for value in values:
+            label = value.strip()
+            key = label.casefold()
+            if not label or key in seen:
+                continue
+            if len(label) > 150:
+                raise ValueError("Discovery preference labels cannot exceed 150 characters")
+            cleaned.append(label)
+            seen.add(key)
+        return cleaned
+
+
+class GameDiscoveryPreferencesRead(GameDiscoveryPreferencesUpdate):
+    pass
+
+
+class HiddenGameReleaseCreate(BaseModel):
+    game: GameSearchResult
 
 
 class BacklogEntryBase(BaseModel):

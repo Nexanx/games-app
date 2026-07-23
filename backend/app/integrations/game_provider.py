@@ -1,9 +1,19 @@
+from collections import OrderedDict
 from datetime import date, datetime, timezone
+from time import monotonic
 
 import httpx
 
 from app.core.config import Settings
 from app.schemas.games import ExternalRating, GameSearchPage, GameSearchResult
+
+
+RAWG_DISCOVERY_CACHE_TTL_SECONDS = 300.0
+RAWG_DISCOVERY_CACHE_MAX_ENTRIES = 64
+_discovery_cache: OrderedDict[
+    tuple[tuple[str, str], ...],
+    tuple[float, GameSearchPage],
+] = OrderedDict()
 
 
 class GameProviderConfigurationError(RuntimeError):
@@ -70,14 +80,27 @@ class GameProvider:
             params["search"] = query.strip()
             params["search_precise"] = True
 
+        cache_key = tuple(
+            sorted(
+                (key, str(value))
+                for key, value in params.items()
+                if key != "key"
+            )
+        )
+        cached = _get_cached_discovery_page(cache_key)
+        if cached is not None:
+            return cached
+
         fetched_at = datetime.now(timezone.utc)
         payload = await self._request_rawg("https://api.rawg.io/api/games", params=params)
-        return GameSearchPage(
+        result = GameSearchPage(
             results=[self._map_result(item, fetched_at) for item in payload.get("results", [])],
             page=page,
             page_size=page_size,
             has_next=bool(payload.get("next")),
         )
+        _store_cached_discovery_page(cache_key, result)
+        return result
 
     async def _search_rawg(self, query: str, *, page: int, page_size: int) -> GameSearchPage:
         params = {
@@ -190,3 +213,33 @@ class GameProvider:
         except (TypeError, ValueError):
             return None
         return parsed if parsed > 0 else None
+
+
+def _get_cached_discovery_page(
+    key: tuple[tuple[str, str], ...],
+) -> GameSearchPage | None:
+    cached = _discovery_cache.get(key)
+    if cached is None:
+        return None
+    created_at, page = cached
+    if monotonic() - created_at > RAWG_DISCOVERY_CACHE_TTL_SECONDS:
+        _discovery_cache.pop(key, None)
+        return None
+    _discovery_cache.move_to_end(key)
+    return page.model_copy(deep=True)
+
+
+def _store_cached_discovery_page(
+    key: tuple[tuple[str, str], ...],
+    page: GameSearchPage,
+) -> None:
+    _discovery_cache[key] = (monotonic(), page.model_copy(deep=True))
+    _discovery_cache.move_to_end(key)
+    while len(_discovery_cache) > RAWG_DISCOVERY_CACHE_MAX_ENTRIES:
+        _discovery_cache.popitem(last=False)
+
+
+def clear_discovery_cache() -> None:
+    """Clear only provider data; personalized scores are never cached."""
+
+    _discovery_cache.clear()

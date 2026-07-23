@@ -109,6 +109,34 @@ class GameRecommendationFeedback(Base, TimestampMixin):
     tags: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
 
 
+class GameDiscoveryPreferences(Base, TimestampMixin):
+    __tablename__ = "game_discovery_preferences"
+    __table_args__ = (
+        CheckConstraint("id = 1", name="ck_game_discovery_preferences_singleton"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    platforms: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    genres: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+
+
+class HiddenGameRelease(Base, TimestampMixin):
+    __tablename__ = "hidden_game_releases"
+    __table_args__ = (
+        UniqueConstraint(
+            "external_source",
+            "external_id",
+            name="uq_hidden_game_releases_external_identity",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    external_source: Mapped[str] = mapped_column(String(50), nullable=False)
+    external_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    game_payload: Mapped[dict] = mapped_column(JSON, nullable=False)
+
+
 class CustomStatistic(Base, TimestampMixin):
     __tablename__ = "custom_statistics"
     __table_args__ = (

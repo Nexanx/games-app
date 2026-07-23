@@ -3,10 +3,10 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
-from app.schemas.games import ExternalRating
+from app.schemas.games import ExternalRating, GameSearchResult
 
 
-BACKUP_FORMAT_VERSION = 4
+BACKUP_FORMAT_VERSION = 5
 
 
 class BackupGame(BaseModel):
@@ -144,6 +144,23 @@ class BackupRecommendationFeedback(BaseModel):
     updated_at: datetime
 
 
+class BackupDiscoveryPreferences(BaseModel):
+    platforms: list[str] = Field(default_factory=list)
+    genres: list[str] = Field(default_factory=list)
+    created_at: datetime
+    updated_at: datetime
+
+
+class BackupHiddenGameRelease(BaseModel):
+    id: int = Field(..., gt=0)
+    external_source: str = Field(..., min_length=1, max_length=50)
+    external_id: str = Field(..., min_length=1, max_length=255)
+    title: str = Field(..., min_length=1, max_length=255)
+    game_payload: GameSearchResult
+    created_at: datetime
+    updated_at: datetime
+
+
 class BackupData(BaseModel):
     games: list[BackupGame] = Field(default_factory=list)
     backlog_entries: list[BackupBacklogEntry] = Field(default_factory=list)
@@ -156,6 +173,8 @@ class BackupData(BaseModel):
     chat_sessions: list[BackupChatSession] = Field(default_factory=list)
     chat_messages: list[BackupChatMessage] = Field(default_factory=list)
     recommendation_feedback: list[BackupRecommendationFeedback] = Field(default_factory=list)
+    discovery_preferences: BackupDiscoveryPreferences | None = None
+    hidden_game_releases: list[BackupHiddenGameRelease] = Field(default_factory=list)
     settings: dict[str, str] = Field(default_factory=dict)
 
     @model_validator(mode="after")
@@ -171,6 +190,7 @@ class BackupData(BaseModel):
         _ensure_unique_ids("chat_sessions", self.chat_sessions)
         _ensure_unique_ids("chat_messages", self.chat_messages)
         _ensure_unique_ids("recommendation_feedback", self.recommendation_feedback)
+        _ensure_unique_ids("hidden_game_releases", self.hidden_game_releases)
 
         feedback_identities = [
             (item.external_source.strip().casefold(), item.external_id.strip().casefold())
@@ -178,6 +198,12 @@ class BackupData(BaseModel):
         ]
         if len(feedback_identities) != len(set(feedback_identities)):
             raise ValueError("Duplicate external identities in recommendation feedback.")
+        hidden_identities = [
+            (item.external_source.strip().casefold(), item.external_id.strip().casefold())
+            for item in self.hidden_game_releases
+        ]
+        if len(hidden_identities) != len(set(hidden_identities)):
+            raise ValueError("Duplicate external identities in hidden game releases.")
 
         game_ids = {item.id for item in self.games}
         completed_ids = {item.id for item in self.completed_game_entries}
@@ -206,7 +232,7 @@ class BackupData(BaseModel):
 
 
 class BackupDocument(BaseModel):
-    format_version: Literal[1, 2, 3, BACKUP_FORMAT_VERSION] = BACKUP_FORMAT_VERSION
+    format_version: Literal[1, 2, 3, 4, BACKUP_FORMAT_VERSION] = BACKUP_FORMAT_VERSION
     exported_at: datetime
     app_name: str = "Games Tracker"
     data: BackupData

@@ -16,6 +16,8 @@ import type {
   CompletedGamesYearReport,
   DashboardSummary,
   Game,
+  GameDiscoveryPreferences,
+  GameRecommendedReleasesPage,
   GameRecommendations,
   GameRecommendationVerdict,
   GameReleaseFilters,
@@ -167,6 +169,33 @@ export const api = {
     })}`, { method: "DELETE" }),
   getGameReleases: (filters: GameReleaseFilters, signal?: AbortSignal) =>
     request<GameReleasesPage>(`/games/releases${qs({ ...filters })}`, { signal, timeoutMs: 30_000 }),
+  getRecommendedGameReleases: (filters: GameReleaseFilters, signal?: AbortSignal) =>
+    request<GameRecommendedReleasesPage>(
+      `/games/releases/recommended${qs({ ...filters })}`,
+      { signal, timeoutMs: 30_000 }
+    ),
+  getHiddenGameReleases: (filters: GameReleaseFilters, signal?: AbortSignal) =>
+    request<GameReleasesPage>(
+      `/games/releases/hidden${qs({ ...filters })}`,
+      { signal, timeoutMs: 30_000 }
+    ),
+  getGameReleasePreferences: (signal?: AbortSignal) =>
+    request<GameDiscoveryPreferences>("/games/releases/preferences", { signal }),
+  saveGameReleasePreferences: (preferences: GameDiscoveryPreferences) =>
+    request<GameDiscoveryPreferences>("/games/releases/preferences", {
+      method: "PUT",
+      body: JSON.stringify(preferences)
+    }),
+  hideGameRelease: (game: GameSearchResult) =>
+    request<void>("/games/releases/hidden", {
+      method: "PUT",
+      body: JSON.stringify({ game })
+    }),
+  unhideGameRelease: (game: GameSearchResult) =>
+    request<void>(`/games/releases/hidden${qs({
+      external_source: game.external_source,
+      external_id: game.external_id
+    })}`, { method: "DELETE" }),
   getRawgGame: (externalId: string, signal?: AbortSignal) =>
     request<GameSearchResult>(`/games/rawg/${encodeURIComponent(externalId)}`, { signal, timeoutMs: 30_000 }),
   createGame: (payload: Partial<Game>) =>

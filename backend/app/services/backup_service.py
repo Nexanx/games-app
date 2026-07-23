@@ -12,7 +12,9 @@ from app.models import (
     CompletedGameEntry,
     CustomStatistic,
     Game,
+    GameDiscoveryPreferences,
     GameRecommendationFeedback,
+    HiddenGameRelease,
     PoeCharacter,
     PoeCurrencyStat,
     PoeEquipmentItem,
@@ -25,8 +27,10 @@ from app.schemas.backup import (
     BackupCompletedGameEntry,
     BackupCustomStatistic,
     BackupData,
+    BackupDiscoveryPreferences,
     BackupDocument,
     BackupGame,
+    BackupHiddenGameRelease,
     BackupImportResult,
     BackupPoeCharacter,
     BackupPoeCurrencyStatistic,
@@ -81,7 +85,20 @@ def export_backup(db: Session) -> BackupDocument:
                 BackupRecommendationFeedback.model_validate(item, from_attributes=True)
                 for item in db.scalars(select(GameRecommendationFeedback).order_by(GameRecommendationFeedback.id))
             ],
-            # Settings are intentionally empty: the active application has no settings model and backups never contain secrets.
+            discovery_preferences=(
+                BackupDiscoveryPreferences.model_validate(
+                    preferences,
+                    from_attributes=True,
+                )
+                if (preferences := db.get(GameDiscoveryPreferences, 1)) is not None
+                else None
+            ),
+            hidden_game_releases=[
+                BackupHiddenGameRelease.model_validate(item, from_attributes=True)
+                for item in db.scalars(select(HiddenGameRelease).order_by(HiddenGameRelease.id))
+            ],
+            # Legacy settings remain empty; discovery preferences are exported
+            # explicitly above and backups never contain secrets.
             settings={},
         ),
     )
@@ -102,6 +119,8 @@ def replace_with_backup(db: Session, data: BackupData) -> BackupImportResult:
 def _delete_existing_records(db: Session) -> None:
     # Explicit child-first deletes also work with SQLite test databases that do not enable FK cascades.
     for model in (
+        HiddenGameRelease,
+        GameDiscoveryPreferences,
         GameRecommendationFeedback,
         ChatMessage,
         ChatSession,
@@ -282,6 +301,27 @@ def _restore_records(db: Session, data: BackupData) -> dict[str, int]:
                 updated_at=item.updated_at,
             )
         )
+    if data.discovery_preferences is not None:
+        db.add(
+            GameDiscoveryPreferences(
+                id=1,
+                platforms=data.discovery_preferences.platforms,
+                genres=data.discovery_preferences.genres,
+                created_at=data.discovery_preferences.created_at,
+                updated_at=data.discovery_preferences.updated_at,
+            )
+        )
+    for item in data.hidden_game_releases:
+        db.add(
+            HiddenGameRelease(
+                external_source=item.external_source.strip().casefold(),
+                external_id=item.external_id.strip().casefold(),
+                title=item.title,
+                game_payload=item.game_payload.model_dump(mode="json"),
+                created_at=item.created_at,
+                updated_at=item.updated_at,
+            )
+        )
     db.flush()
     return {
         "games": len(data.games),
@@ -295,4 +335,6 @@ def _restore_records(db: Session, data: BackupData) -> dict[str, int]:
         "chat_sessions": len(data.chat_sessions),
         "chat_messages": len(data.chat_messages),
         "recommendation_feedback": len(data.recommendation_feedback),
+        "discovery_preferences": 1 if data.discovery_preferences is not None else 0,
+        "hidden_game_releases": len(data.hidden_game_releases),
     }
