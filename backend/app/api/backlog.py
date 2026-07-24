@@ -21,6 +21,7 @@ from app.services.backlog_service import (
     add_games_to_backlog,
     get_backlog_identity_index,
     is_game_on_backlog,
+    remove_backlog_entry_and_compact,
     reorder_backlog,
 )
 
@@ -147,8 +148,12 @@ def delete_backlog_entry(entry_id: int, db: Session = Depends(get_session)) -> N
     entry = db.get(BacklogEntry, entry_id)
     if not entry:
         raise HTTPException(status_code=404, detail="Backlog entry not found")
-    db.delete(entry)
-    db.commit()
+    try:
+        remove_backlog_entry_and_compact(db, entry)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
 
 
 def _get_entry(db: Session, entry_id: int) -> BacklogEntry:

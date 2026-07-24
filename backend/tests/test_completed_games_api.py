@@ -112,10 +112,38 @@ def test_completing_backlog_entry_removes_it_only_after_success(client, db_sessi
     assert response.json()["completion_date"] == "2025-07-15"
 
 
+def test_completing_first_backlog_entry_compacts_remaining_positions(client, db_session):
+    games = [add_game(db_session, title) for title in ("First", "Second", "Third")]
+    backlog_entries = [
+        BacklogEntry(game_id=game.id, position=position)
+        for position, game in enumerate(games)
+    ]
+    db_session.add_all(backlog_entries)
+    db_session.commit()
+
+    response = client.post(
+        "/api/completed-games",
+        json={
+            "game_id": games[0].id,
+            "backlog_entry_id": backlog_entries[0].id,
+            "playtime_hours": 8,
+        },
+    )
+    remaining = client.get("/api/backlog").json()
+
+    assert response.status_code == 201
+    assert [
+        (item["game"]["title"], item["position"])
+        for item in remaining
+    ] == [("Second", 0), ("Third", 1)]
+
+
 def test_completion_transaction_rolls_back_when_commit_fails(client, db_session, monkeypatch):
     game = add_game(db_session, "Rollback Game")
+    next_game = add_game(db_session, "Still queued")
     backlog = BacklogEntry(game_id=game.id, position=0)
-    db_session.add(backlog)
+    next_backlog = BacklogEntry(game_id=next_game.id, position=1)
+    db_session.add_all([backlog, next_backlog])
     db_session.commit()
 
     def fail_commit():
@@ -129,6 +157,7 @@ def test_completion_transaction_rolls_back_when_commit_fails(client, db_session,
         )
 
     assert db_session.get(BacklogEntry, backlog.id) is not None
+    assert db_session.get(BacklogEntry, next_backlog.id).position == 1
     assert db_session.scalar(select(func.count(CompletedGameEntry.id))) == 0
 
 

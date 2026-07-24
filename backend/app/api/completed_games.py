@@ -33,6 +33,7 @@ from app.services.completed_games_service import (
     get_completed_entries_for_year,
     get_poe_year_metrics,
 )
+from app.services.backlog_service import remove_backlog_entry_and_compact
 from app.services.analytics_service import (
     build_forecast,
     build_history_summary,
@@ -247,10 +248,10 @@ def create_completed_game(
     entry_data = payload.model_dump(exclude={"backlog_entry_id", "custom_statistics"})
     entry = CompletedGameEntry(**entry_data)
     entry.custom_statistics = [CustomStatistic(**stat.model_dump()) for stat in payload.custom_statistics]
-    db.add(entry)
-    if backlog_entry:
-        db.delete(backlog_entry)
     try:
+        db.add(entry)
+        if backlog_entry:
+            remove_backlog_entry_and_compact(db, backlog_entry)
         db.commit()
     except Exception:
         db.rollback()

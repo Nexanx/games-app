@@ -331,3 +331,25 @@ def reorder_backlog(session: Session, ordered_ids: list[int]) -> list[BacklogEnt
         .options(selectinload(BacklogEntry.game))
         .order_by(BacklogEntry.position)
     ).all()
+
+
+def remove_backlog_entry_and_compact(
+    session: Session,
+    entry: BacklogEntry,
+) -> None:
+    """Remove one queue item and keep all remaining positions contiguous.
+
+    Ordering by the stored position first preserves the user's chosen order.
+    The additional columns make recovery deterministic if older operations
+    already left duplicate positions or gaps in the queue.
+    """
+
+    remaining_entries = session.scalars(
+        select(BacklogEntry)
+        .where(BacklogEntry.id != entry.id)
+        .order_by(BacklogEntry.position, BacklogEntry.created_at, BacklogEntry.id)
+        .with_for_update()
+    ).all()
+    session.delete(entry)
+    for position, remaining_entry in enumerate(remaining_entries):
+        remaining_entry.position = position

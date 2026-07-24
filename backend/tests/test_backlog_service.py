@@ -19,6 +19,30 @@ def test_reorder_backlog_updates_positions(db_session):
     assert entry_a.position == 1
 
 
+def test_deleting_backlog_entry_compacts_existing_position_gaps(client, db_session):
+    games = [
+        Game(title=title, genres=[], platforms=[], external_source="manual")
+        for title in ("First", "Second", "Third")
+    ]
+    db_session.add_all(games)
+    db_session.flush()
+    entries = [
+        BacklogEntry(game_id=game.id, position=position)
+        for game, position in zip(games, (0, 2, 5), strict=True)
+    ]
+    db_session.add_all(entries)
+    db_session.commit()
+
+    response = client.delete(f"/api/backlog/{entries[0].id}")
+    remaining = client.get("/api/backlog").json()
+
+    assert response.status_code == 204
+    assert [
+        (item["game"]["title"], item["position"])
+        for item in remaining
+    ] == [("Second", 0), ("Third", 1)]
+
+
 def test_backlog_sort_direction_supports_added_date_and_title(client, db_session):
     beta = Game(title="Beta", genres=[], platforms=[], external_source="manual")
     alpha = Game(title="Alpha", genres=[], platforms=[], external_source="manual")
